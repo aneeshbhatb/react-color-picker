@@ -1,73 +1,48 @@
-# React + TypeScript + Vite
+# @aneeshbhat/react-color-picker
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A lightweight React color picker component.
 
-Currently, two official plugins are available:
+This project is currently in early development. The API and features may change as the component evolves.
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+## Installation
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install @aneeshbhat/react-color-picker
+```
+#### Using Bun:
+```bash
+bun add @aneeshbhat/react-color-picker
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Usage
+```jsx
+import { useState } from "react";
+import { ReactColorPicker } from "@aneeshbhat/react-color-picker";
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+function App() {
+  const [color, setColor] = useState("#ffffff");
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+  return (
+    <div style={{ width: 320, height: 320 }}>
+      <ReactColorPicker value={color} onChange={setColor} />
+    </div>
+  );
+}
+
+export default App;
 ```
+
+## Props
+| Prop | Type | Default | Description |
+|---|---|---|---|
+| `value` | `string` | `"#ffffff"` | The selected color value. |
+| `onChange` | `(color: string) => void` | `undefined` | Called when the selected color changes. |
+
+## Notes
+* The component is controlled by the host application.
+* The picker is intended to fit inside the container provided by the host app.
+* More options and customization APIs may be added later.
+
+## License
+
+MIT
