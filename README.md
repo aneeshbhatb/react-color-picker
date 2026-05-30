@@ -19,6 +19,8 @@ bun add @aneeshbhat/react-color-picker
 import { useState } from "react";
 import { ReactColorPicker } from "@aneeshbhat/react-color-picker";
 
+import "@aneeshbhat/react-color-picker/style.css";
+
 function App() {
   const [color, setColor] = useState("#ffffff");
 
