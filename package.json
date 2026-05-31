@@ -1,6 +1,6 @@
 {
   "name": "@aneeshbhat/react-color-picker",
-  "version": "0.1.0-alpha.0",
+  "version": "0.1.0-alpha.1",
   "description": "A simple React color picker with solid and gradient color support.",
   "license": "MIT",
   "author": "Aneesh Bhat",
