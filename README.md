@@ -4,6 +4,11 @@ A lightweight React color picker with saturation, hue, and alpha controls.
 
 > This project is in early development. The API may change as the component evolves.
 
+## Playground
+
+Demo: https://aneeshbhatb.github.io/react-color-picker-playground/
+
+
 ## Installation
 
 ```bash
