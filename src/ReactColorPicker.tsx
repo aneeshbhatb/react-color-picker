@@ -21,35 +21,82 @@ type HSV = {
   v: number
 }
 
+type HSVA = HSV & {
+  a: number
+}
+
 function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max)
 }
 
-function normalizeHex(value: string) {
+function expandHexChannel(channel: string) {
+  return `${channel}${channel}`
+}
+
+function parseHexColor(value: string): { rgb: RGB; a: number } | null {
   let hex = value.trim()
 
   if (!hex.startsWith('#')) {
     hex = `#${hex}`
   }
 
-  if (/^#[0-9a-fA-F]{3}$/.test(hex)) {
-    return `#${hex[1]}${hex[1]}${hex[2]}${hex[2]}${hex[3]}${hex[3]}`.toLowerCase()
+  if (/^#[0-9a-fA-F]{3,4}$/.test(hex)) {
+    const r = parseInt(expandHexChannel(hex[1]), 16)
+    const g = parseInt(expandHexChannel(hex[2]), 16)
+    const b = parseInt(expandHexChannel(hex[3]), 16)
+    const a = hex.length === 5 ? (parseInt(expandHexChannel(hex[4]), 16) / 255) * 100 : 100
+
+    return { rgb: { r, g, b }, a }
   }
 
-  if (/^#[0-9a-fA-F]{6}$/.test(hex)) {
-    return hex.toLowerCase()
+  if (/^#[0-9a-fA-F]{6,8}$/.test(hex)) {
+    const r = parseInt(hex.slice(1, 3), 16)
+    const g = parseInt(hex.slice(3, 5), 16)
+    const b = parseInt(hex.slice(5, 7), 16)
+    const a = hex.length === 9 ? (parseInt(hex.slice(7, 9), 16) / 255) * 100 : 100
+
+    return { rgb: { r, g, b }, a }
   }
 
-  return DEFAULT_COLOR
+  return null
 }
 
-function hexToRgb(hex: string): RGB {
-  const normalized = normalizeHex(hex)
+function parseCssRgbColor(value: string): { rgb: RGB; a: number } | null {
+  const match = value
+    .trim()
+    .match(
+      /^rgba?\(\s*([+-]?\d*\.?\d+)\s*,\s*([+-]?\d*\.?\d+)\s*,\s*([+-]?\d*\.?\d+)(?:\s*,\s*([+-]?\d*\.?\d+%?))?\s*\)$/i
+    )
+
+  if (!match) {
+    return null
+  }
+
+  const [, red, green, blue, alpha] = match
+
+  let a = 100
+
+  if (alpha) {
+    a = alpha.endsWith('%') ? Number(alpha.slice(0, -1)) : Number(alpha) * 100
+  }
 
   return {
-    r: parseInt(normalized.slice(1, 3), 16),
-    g: parseInt(normalized.slice(3, 5), 16),
-    b: parseInt(normalized.slice(5, 7), 16),
+    rgb: {
+      r: Math.round(clamp(Number(red), 0, 255)),
+      g: Math.round(clamp(Number(green), 0, 255)),
+      b: Math.round(clamp(Number(blue), 0, 255)),
+    },
+    a: clamp(a, 0, 100),
+  }
+}
+
+function parseColor(value: string): HSVA {
+  const parsedColor =
+    parseHexColor(value) ?? parseCssRgbColor(value) ?? parseHexColor(DEFAULT_COLOR)!
+
+  return {
+    ...rgbToHsv(parsedColor.rgb),
+    a: parsedColor.a,
   }
 }
 
@@ -132,45 +179,67 @@ function hsvToHex(hsv: HSV) {
   return rgbToHex(hsvToRgb(hsv))
 }
 
-function hexToHsv(hex: string) {
-  return rgbToHsv(hexToRgb(hex))
+function formatAlpha(alpha: number) {
+  const normalizedAlpha = clamp(alpha, 0, 100) / 100
+
+  if (normalizedAlpha === 0 || normalizedAlpha === 1) {
+    return normalizedAlpha
+  }
+
+  return Math.max(0.001, Math.floor(normalizedAlpha * 1000) / 1000)
+}
+
+function formatColor(hsva: HSVA) {
+  const rgb = hsvToRgb(hsva)
+
+  if (hsva.a >= 100) {
+    return rgbToHex(rgb)
+  }
+
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${formatAlpha(hsva.a)})`
 }
 
 export function ReactColorPicker({ value = DEFAULT_COLOR, onChange }: ReactColorPickerProps) {
-  const normalizedValue = normalizeHex(value)
   const lastEmittedColorRef = useRef<string | null>(null)
 
-  const [hsv, setHsv] = useState<HSV>(() => hexToHsv(normalizedValue))
+  const [hsva, setHsva] = useState<HSVA>(() => parseColor(value))
 
   useEffect(() => {
-    const nextColor = normalizeHex(value)
+    const nextColor = parseColor(value)
+    const nextFormattedColor = formatColor(nextColor)
 
-    if (lastEmittedColorRef.current === nextColor) {
+    if (lastEmittedColorRef.current === nextFormattedColor) {
       return
     }
 
-    const nextHsv = hexToHsv(nextColor)
-
-    setHsv((currentHsv) => ({
-      h: nextHsv.s === 0 || nextHsv.v === 0 ? currentHsv.h : nextHsv.h,
-      s: nextHsv.s,
-      v: nextHsv.v,
+    setHsva((currentHsva) => ({
+      h: nextColor.s === 0 || nextColor.v === 0 ? currentHsva.h : nextColor.h,
+      s: nextColor.s,
+      v: nextColor.v,
+      a: nextColor.a,
     }))
   }, [value])
 
-  const color = hsvToHex(hsv)
-  const hueColor = hsvToHex({ h: hsv.h, s: 100, v: 100 })
+  const rgb = hsvToRgb(hsva)
+  const color = formatColor(hsva)
+  const solidColor = rgbToHex(rgb)
+  const hueColor = hsvToHex({ h: hsva.h, s: 100, v: 100 })
+  const alphaGradient = `
+    linear-gradient(to right, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0), rgb(${rgb.r}, ${rgb.g}, ${rgb.b})),
+    repeating-conic-gradient(#fff 0% 25%, #c9c9c9 0% 50%) 50% / 12px 12px
+  `
 
-  function updateColor(nextHsv: HSV) {
-    const clampedHsv = {
-      h: clamp(nextHsv.h, 0, 359),
-      s: clamp(nextHsv.s, 0, 100),
-      v: clamp(nextHsv.v, 0, 100),
+  function updateColor(nextHsva: HSVA) {
+    const clampedHsva = {
+      h: clamp(nextHsva.h, 0, 359),
+      s: clamp(nextHsva.s, 0, 100),
+      v: clamp(nextHsva.v, 0, 100),
+      a: clamp(nextHsva.a, 0, 100),
     }
 
-    const nextColor = hsvToHex(clampedHsv)
+    const nextColor = formatColor(clampedHsva)
 
-    setHsv(clampedHsv)
+    setHsva(clampedHsva)
     lastEmittedColorRef.current = nextColor
     onChange?.(nextColor)
   }
@@ -182,9 +251,10 @@ export function ReactColorPicker({ value = DEFAULT_COLOR, onChange }: ReactColor
     const y = clamp((event.clientY - rect.top) / rect.height, 0, 1)
 
     updateColor({
-      h: hsv.h,
+      h: hsva.h,
       s: x * 100,
       v: 100 - y * 100,
+      a: hsva.a,
     })
   }
 
@@ -194,8 +264,19 @@ export function ReactColorPicker({ value = DEFAULT_COLOR, onChange }: ReactColor
 
     updateColor({
       h: x * 359,
-      s: hsv.s,
-      v: hsv.v,
+      s: hsva.s,
+      v: hsva.v,
+      a: hsva.a,
+    })
+  }
+
+  function updateAlpha(event: PointerEvent<HTMLDivElement>) {
+    const rect = event.currentTarget.getBoundingClientRect()
+    const x = clamp((event.clientX - rect.left) / rect.width, 0, 1)
+
+    updateColor({
+      ...hsva,
+      a: x * 100,
     })
   }
 
@@ -219,27 +300,37 @@ export function ReactColorPicker({ value = DEFAULT_COLOR, onChange }: ReactColor
     updateHue(event)
   }
 
+  function handleAlphaPointerDown(event: PointerEvent<HTMLDivElement>) {
+    event.currentTarget.setPointerCapture(event.pointerId)
+    updateAlpha(event)
+  }
+
+  function handleAlphaPointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (event.buttons !== 1) return
+    updateAlpha(event)
+  }
+
   function handleSaturationKeyDown(event: KeyboardEvent<HTMLDivElement>) {
     const step = event.shiftKey ? 10 : 1
 
     if (event.key === 'ArrowLeft') {
       event.preventDefault()
-      updateColor({ ...hsv, s: hsv.s - step })
+      updateColor({ ...hsva, s: hsva.s - step })
     }
 
     if (event.key === 'ArrowRight') {
       event.preventDefault()
-      updateColor({ ...hsv, s: hsv.s + step })
+      updateColor({ ...hsva, s: hsva.s + step })
     }
 
     if (event.key === 'ArrowUp') {
       event.preventDefault()
-      updateColor({ ...hsv, v: hsv.v + step })
+      updateColor({ ...hsva, v: hsva.v + step })
     }
 
     if (event.key === 'ArrowDown') {
       event.preventDefault()
-      updateColor({ ...hsv, v: hsv.v - step })
+      updateColor({ ...hsva, v: hsva.v - step })
     }
   }
 
@@ -248,12 +339,26 @@ export function ReactColorPicker({ value = DEFAULT_COLOR, onChange }: ReactColor
 
     if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
       event.preventDefault()
-      updateColor({ ...hsv, h: hsv.h - step })
+      updateColor({ ...hsva, h: hsva.h - step })
     }
 
     if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
       event.preventDefault()
-      updateColor({ ...hsv, h: hsv.h + step })
+      updateColor({ ...hsva, h: hsva.h + step })
+    }
+  }
+
+  function handleAlphaKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    const step = event.shiftKey ? 10 : 1
+
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+      event.preventDefault()
+      updateColor({ ...hsva, a: hsva.a - step })
+    }
+
+    if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      updateColor({ ...hsva, a: hsva.a + step })
     }
   }
 
@@ -278,8 +383,8 @@ export function ReactColorPicker({ value = DEFAULT_COLOR, onChange }: ReactColor
         <div
           className={styles.saturationPointer}
           style={{
-            left: `${hsv.s}%`,
-            top: `${100 - hsv.v}%`,
+            left: `${hsva.s}%`,
+            top: `${100 - hsva.v}%`,
             backgroundColor: color,
           }}
         />
@@ -292,7 +397,7 @@ export function ReactColorPicker({ value = DEFAULT_COLOR, onChange }: ReactColor
         aria-label="Hue"
         aria-valuemin={0}
         aria-valuemax={359}
-        aria-valuenow={Math.round(hsv.h)}
+        aria-valuenow={Math.round(hsva.h)}
         onPointerDown={handleHuePointerDown}
         onPointerMove={handleHuePointerMove}
         onKeyDown={handleHueKeyDown}
@@ -300,7 +405,30 @@ export function ReactColorPicker({ value = DEFAULT_COLOR, onChange }: ReactColor
         <div
           className={styles.huePointer}
           style={{
-            left: `${(hsv.h / 359) * 100}%`,
+            left: `${(hsva.h / 359) * 100}%`,
+          }}
+        />
+      </div>
+
+      <div
+        className={styles.alpha}
+        style={{ background: alphaGradient }}
+        role="slider"
+        tabIndex={0}
+        aria-label="Alpha"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={Math.round(hsva.a)}
+        aria-valuetext={`${Math.round(hsva.a)}%`}
+        onPointerDown={handleAlphaPointerDown}
+        onPointerMove={handleAlphaPointerMove}
+        onKeyDown={handleAlphaKeyDown}
+      >
+        <div
+          className={styles.alphaPointer}
+          style={{
+            left: `${hsva.a}%`,
+            backgroundColor: solidColor,
           }}
         />
       </div>
