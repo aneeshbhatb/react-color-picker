@@ -1,49 +1,126 @@
 # @aneeshbhat/react-color-picker
 
-A lightweight React color picker component.
+A lightweight React color picker with saturation, hue, and alpha controls.
 
-This project is currently in early development. The API and features may change as the component evolves.
+> This project is in early development. The API may change as the component evolves.
 
 ## Installation
 
 ```bash
 npm install @aneeshbhat/react-color-picker
-```
-#### Using Bun:
-```bash
+# or
 bun add @aneeshbhat/react-color-picker
 ```
 
 ## Usage
-```jsx
-import { useState } from "react";
-import { ReactColorPicker } from "@aneeshbhat/react-color-picker";
 
-import "@aneeshbhat/react-color-picker/style.css";
+Import the component and its stylesheet, then wire it up as a controlled input.
+
+```tsx
+import { useState } from 'react'
+import { ReactColorPicker } from '@aneeshbhat/react-color-picker'
+import '@aneeshbhat/react-color-picker/style.css'
 
 function App() {
-  const [color, setColor] = useState("#ffffff");
+  const [color, setColor] = useState('#3b82f6')
 
   return (
-    <div style={{ width: 320, height: 320 }}>
+    <div style={{ width: 320, height: 240 }}>
       <ReactColorPicker value={color} onChange={setColor} />
     </div>
-  );
+  )
 }
-
-export default App;
 ```
 
-## Props
-| Prop | Type | Default | Description |
-|---|---|---|---|
-| `value` | `string` | `"#ffffff"` | The selected color value. |
-| `onChange` | `(color: string) => void` | `undefined` | Called when the selected color changes. |
+The picker fits the dimensions of its container. `onChange` emits a hex string (`#rrggbb`) when the color is fully opaque, or an `rgba(r, g, b, a)` string when the alpha channel is below 100%.
 
-## Notes
-* The component is controlled by the host application.
-* The picker is intended to fit inside the container provided by the host app.
-* More options and customization APIs may be added later.
+## Supported color formats
+
+The `value` prop accepts:
+
+| Format                   | Example                  |
+| ------------------------ | ------------------------ |
+| 3-digit hex              | `#f00`                   |
+| 6-digit hex              | `#ff0000`                |
+| 4-digit hex (with alpha) | `#f00f`                  |
+| 8-digit hex (with alpha) | `#ff0000ff`              |
+| CSS `rgb()`              | `rgb(255, 0, 0)`         |
+| CSS `rgba()`             | `rgba(255, 0, 0, 0.5)`   |
+
+Invalid values fall back to `#ffffff`.
+
+## Props
+
+| Prop         | Type                         | Default     | Description                                                                          |
+| ------------ |------------------------------| ----------- | ------------------------------------------------------------------------------------ |
+| `value`      | `string`                     | `'#ffffff'` | The current color value. Accepts hex or `rgb()`/`rgba()`.                            |
+| `onChange`   | `(color: string) => void`    | —           | Called whenever the color changes. Emits hex when fully opaque, `rgba()` otherwise.  |
+| `classNames` | `ReactColorPickerClassNames` | —           | Custom class names for individual parts of the picker.                               |
+| `styles`     | `ReactColorPickerStyles`     | —           | Inline style overrides for individual parts of the picker.                           |
+
+### `ReactColorPickerClassNames` / `ReactColorPickerStyles`
+
+Both `classNames` and `styles` share the same slot names:
+
+| Slot                 | Targets                                      |
+| -------------------- | -------------------------------------------- |
+| `root`               | The outer wrapper                            |
+| `saturation`         | The saturation/brightness panel              |
+| `saturationPointer`  | The draggable thumb on the saturation panel  |
+| `hue`                | The hue slider                               |
+| `huePointer`         | The draggable thumb on the hue slider        |
+| `alpha`              | The alpha slider                             |
+| `alphaPointer`       | The draggable thumb on the alpha slider      |
+
+## Customization
+
+### Override styles with `styles`
+
+```tsx
+<ReactColorPicker
+  value={color}
+  onChange={setColor}
+  styles={{
+    root: { background: 'transparent', padding: 0 },
+    saturation: { borderRadius: 4 },
+    saturationPointer: { border: '2px solid #fff' },
+    hue: { borderRadius: 4 },
+    huePointer: { border: '2px solid #fff' },
+    alpha: { borderRadius: 4 },
+    alphaPointer: { border: '2px solid #fff' },
+  }}
+/>
+```
+
+### Override styles with `classNames`
+
+```tsx
+<ReactColorPicker
+  value={color}
+  onChange={setColor}
+  classNames={{
+    root: 'my-picker',
+    saturation: 'my-picker__saturation',
+    saturationPointer: 'my-picker__saturation-thumb',
+    hue: 'my-picker__hue',
+    huePointer: 'my-picker__hue-thumb',
+    alpha: 'my-picker__alpha',
+    alphaPointer: 'my-picker__alpha-thumb',
+  }}
+/>
+```
+
+## Keyboard support
+
+Each slider is focusable and supports keyboard navigation:
+
+| Slider | Keys |
+| --- | --- |
+| Saturation/brightness | Arrow Left / Right adjusts saturation, Arrow Up / Down adjusts brightness |
+| Hue | Arrow Left / Down decreases hue, Arrow Right / Up increases hue |
+| Alpha | Arrow Left / Down decreases alpha, Arrow Right / Up increases alpha |
+
+Hold `Shift` for a 10× step on any slider.
 
 ## License
 

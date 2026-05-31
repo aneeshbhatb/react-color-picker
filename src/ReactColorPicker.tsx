@@ -1,10 +1,34 @@
+import type { CSSProperties } from 'react'
+
 import { useEffect, useRef, useState } from 'react'
 import type { PointerEvent, KeyboardEvent } from 'react'
-import styles from './ReactColorPicker.module.css'
+import css from './ReactColorPicker.module.css'
+
+export type ReactColorPickerClassNames = {
+  root?: string
+  saturation?: string
+  saturationPointer?: string
+  hue?: string
+  huePointer?: string
+  alpha?: string
+  alphaPointer?: string
+}
+
+export type ReactColorPickerStyles = {
+  root?: CSSProperties
+  saturation?: CSSProperties
+  saturationPointer?: CSSProperties
+  hue?: CSSProperties
+  huePointer?: CSSProperties
+  alpha?: CSSProperties
+  alphaPointer?: CSSProperties
+}
 
 export type ReactColorPickerProps = {
   value?: string
   onChange?: (color: string) => void
+  classNames?: ReactColorPickerClassNames
+  styles?: ReactColorPickerStyles
 }
 
 const DEFAULT_COLOR = '#ffffff'
@@ -23,6 +47,10 @@ type HSV = {
 
 type HSVA = HSV & {
   a: number
+}
+
+function cx(...classNames: Array<string | undefined | null | false>) {
+  return classNames.filter(Boolean).join(' ')
 }
 
 function clamp(value: number, min: number, max: number) {
@@ -199,7 +227,12 @@ function formatColor(hsva: HSVA) {
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${formatAlpha(hsva.a)})`
 }
 
-export function ReactColorPicker({ value = DEFAULT_COLOR, onChange }: ReactColorPickerProps) {
+export function ReactColorPicker({
+  value = DEFAULT_COLOR,
+  onChange,
+  classNames,
+  styles,
+}: ReactColorPickerProps) {
   const lastEmittedColorRef = useRef<string | null>(null)
 
   const [hsva, setHsva] = useState<HSVA>(() => parseColor(value))
@@ -363,14 +396,15 @@ export function ReactColorPicker({ value = DEFAULT_COLOR, onChange }: ReactColor
   }
 
   return (
-    <div className={styles.rcp}>
+    <div className={cx(css.rcp, classNames?.root)} style={styles?.root}>
       <div
-        className={styles.saturation}
+        className={cx(css.saturation, classNames?.saturation)}
         style={{
           background: `
-            linear-gradient(to top, #000, transparent),
-            linear-gradient(to right, #fff, ${hueColor})
-          `,
+        linear-gradient(to top, #000, transparent),
+        linear-gradient(to right, #fff, ${hueColor})
+      `,
+          ...styles?.saturation,
         }}
         role="slider"
         tabIndex={0}
@@ -381,17 +415,19 @@ export function ReactColorPicker({ value = DEFAULT_COLOR, onChange }: ReactColor
         onKeyDown={handleSaturationKeyDown}
       >
         <div
-          className={styles.saturationPointer}
+          className={cx(css.saturationPointer, classNames?.saturationPointer)}
           style={{
             left: `${hsva.s}%`,
             top: `${100 - hsva.v}%`,
             backgroundColor: color,
+            ...styles?.saturationPointer,
           }}
         />
       </div>
 
       <div
-        className={styles.hue}
+        className={cx(css.hue, classNames?.hue)}
+        style={styles?.hue}
         role="slider"
         tabIndex={0}
         aria-label="Hue"
@@ -403,16 +439,20 @@ export function ReactColorPicker({ value = DEFAULT_COLOR, onChange }: ReactColor
         onKeyDown={handleHueKeyDown}
       >
         <div
-          className={styles.huePointer}
+          className={cx(css.huePointer, classNames?.huePointer)}
           style={{
             left: `${(hsva.h / 359) * 100}%`,
+            ...styles?.huePointer,
           }}
         />
       </div>
 
       <div
-        className={styles.alpha}
-        style={{ background: alphaGradient }}
+        className={cx(css.alpha, classNames?.alpha)}
+        style={{
+          background: alphaGradient,
+          ...styles?.alpha,
+        }}
         role="slider"
         tabIndex={0}
         aria-label="Alpha"
@@ -425,10 +465,11 @@ export function ReactColorPicker({ value = DEFAULT_COLOR, onChange }: ReactColor
         onKeyDown={handleAlphaKeyDown}
       >
         <div
-          className={styles.alphaPointer}
+          className={cx(css.alphaPointer, classNames?.alphaPointer)}
           style={{
             left: `${hsva.a}%`,
             backgroundColor: solidColor,
+            ...styles?.alphaPointer,
           }}
         />
       </div>
