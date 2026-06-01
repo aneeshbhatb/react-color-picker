@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   css: {
     modules: {
-      generateScopedName: 'abrcp_[name]__[local]___[hash:base64:5]',
+      generateScopedName: 'abrcp_[local]_[hash:base64:4]',
     },
   },
   build: {
@@ -15,16 +15,12 @@ export default defineConfig({
       name: 'ReactColorPicker',
       fileName: 'react-color-picker',
       cssFileName: 'style',
-      formats: ['es', 'cjs'],
+      formats: ['es'],
     },
+    minify: true,
+    cssMinify: true,
     rollupOptions: {
       external: ['react', 'react-dom', 'react/jsx-runtime'],
-      output: {
-        globals: {
-          react: 'React',
-          'react-dom': 'ReactDOM',
-        },
-      },
     },
   },
 })

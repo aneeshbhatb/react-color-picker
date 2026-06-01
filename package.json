@@ -23,14 +23,12 @@
     "dist",
     "README.md"
   ],
-  "main": "./dist/react-color-picker.cjs",
   "module": "./dist/react-color-picker.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/react-color-picker.js",
-      "require": "./dist/react-color-picker.cjs"
+      "import": "./dist/react-color-picker.js"
     },
     "./style.css": "./dist/style.css"
   },

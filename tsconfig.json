@@ -16,8 +16,9 @@
     "skipLibCheck": true,
 
     "declaration": true,
-    "declarationMap": true,
+    "declarationMap": false,
     "emitDeclarationOnly": true,
+    "sourceMap": false,
 
     "noUnusedLocals": true,
     "noUnusedParameters": true,
