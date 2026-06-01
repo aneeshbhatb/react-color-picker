@@ -61,5 +61,13 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.60.0",
     "vite": "^8.0.14"
+  },
+  "homepage": "https://aneeshbhatb.github.io/react-color-picker-playground/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/aneeshbhatb/react-color-picker.git"
+  },
+  "bugs": {
+    "url": "https://github.com/aneeshbhatb/react-color-picker/issues"
   }
 }
