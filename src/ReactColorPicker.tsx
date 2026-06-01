@@ -1,7 +1,7 @@
 import type { CSSProperties } from 'react'
 
 import { useEffect, useRef, useState } from 'react'
-import type { PointerEvent, KeyboardEvent } from 'react'
+import type { ChangeEvent, KeyboardEvent, PointerEvent } from 'react'
 import css from './ReactColorPicker.module.css'
 
 export type ReactColorPickerClassNames = {
@@ -12,6 +12,8 @@ export type ReactColorPickerClassNames = {
   huePointer?: string
   alpha?: string
   alphaPointer?: string
+  eyedrop?: string
+  eyedropIcon?: string
 }
 
 export type ReactColorPickerStyles = {
@@ -22,6 +24,8 @@ export type ReactColorPickerStyles = {
   huePointer?: CSSProperties
   alpha?: CSSProperties
   alphaPointer?: CSSProperties
+  eyedrop?: CSSProperties
+  eyedropIcon?: CSSProperties
 }
 
 export type ReactColorPickerProps = {
@@ -29,6 +33,7 @@ export type ReactColorPickerProps = {
   onChange?: (color: string) => void
   classNames?: ReactColorPickerClassNames
   styles?: ReactColorPickerStyles
+  hideEyedrop?: boolean
 }
 
 const DEFAULT_COLOR = '#ffffff'
@@ -47,6 +52,14 @@ type HSV = {
 
 type HSVA = HSV & {
   a: number
+}
+
+type EyeDropperConstructor = new () => {
+  open: () => Promise<{ sRGBHex: string }>
+}
+
+type WindowWithEyeDropper = Window & {
+  EyeDropper?: EyeDropperConstructor
 }
 
 function cx(...classNames: Array<string | undefined | null | false>) {
@@ -232,7 +245,9 @@ export function ReactColorPicker({
   onChange,
   classNames,
   styles,
+  hideEyedrop = false,
 }: ReactColorPickerProps) {
+  const colorInputRef = useRef<HTMLInputElement>(null)
   const lastEmittedColorRef = useRef<string | null>(null)
 
   const [hsva, setHsva] = useState<HSVA>(() => parseColor(value))
@@ -395,6 +410,38 @@ export function ReactColorPicker({
     }
   }
 
+  function updateFromPickedColor(nextColor: string) {
+    const nextHsva = parseColor(nextColor)
+
+    updateColor({
+      h: nextHsva.s === 0 || nextHsva.v === 0 ? hsva.h : nextHsva.h,
+      s: nextHsva.s,
+      v: nextHsva.v,
+      a: nextHsva.a,
+    })
+  }
+
+  async function handlePickerClick() {
+    const EyeDropper =
+      typeof window === 'undefined' ? undefined : (window as WindowWithEyeDropper).EyeDropper
+
+    if (!EyeDropper) {
+      colorInputRef.current?.click()
+      return
+    }
+
+    try {
+      const { sRGBHex } = await new EyeDropper().open()
+      updateFromPickedColor(sRGBHex)
+    } catch {
+      // The browser throws if the user cancels the picker. No state update is needed.
+    }
+  }
+
+  function handleNativePickerChange(event: ChangeEvent<HTMLInputElement>) {
+    updateFromPickedColor(event.target.value)
+  }
+
   return (
     <div className={cx(css.rcp, classNames?.root)} style={styles?.root}>
       <div
@@ -473,6 +520,38 @@ export function ReactColorPicker({
           }}
         />
       </div>
+
+      {!hideEyedrop && (
+        <button
+          className={cx(css.eyedrop, classNames?.eyedrop)}
+          style={styles?.eyedrop}
+          type="button"
+          aria-label="Pick a color"
+          title="Pick a color"
+          onClick={handlePickerClick}
+        >
+          <svg
+            className={cx(css.eyedropIcon, classNames?.eyedropIcon)}
+            style={styles?.eyedropIcon}
+            xmlns="http://www.w3.org/2000/svg"
+            viewBox="0 -960 960 960"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d="M120-120v-190l358-358-58-56 58-56 76 76 124-124q5-5 12.5-8t15.5-3q8 0 15 3t13 8l94 94q5 6 8 13t3 15q0 8-3 15.5t-8 12.5L705-555l76 78-57 57-56-58-358 358H120Zm80-80h78l332-334-76-76-334 332v78Zm447-410 96-96-37-37-96 96 37 37Zm0 0-37-37 37 37Z" />
+          </svg>
+        </button>
+      )}
+
+      <input
+        ref={colorInputRef}
+        className={css.eyedropInput}
+        type="color"
+        value={solidColor}
+        tabIndex={-1}
+        aria-hidden="true"
+        onChange={handleNativePickerChange}
+      />
     </div>
   )
 }
