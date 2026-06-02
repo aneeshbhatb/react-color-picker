@@ -1,11 +1,21 @@
 import type { CSSProperties } from 'react'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import type { ChangeEvent, KeyboardEvent, PointerEvent } from 'react'
 import css from './ReactColorPicker.module.css'
 
+export type ReactColorPickerActiveMode = 'solid' | 'gradient'
+export type ReactColorPickerMode = ReactColorPickerActiveMode | 'both'
+
 export type ReactColorPickerClassNames = {
   root?: string
+  modeToggle?: string
+  modeOption?: string
+  modeOptionActive?: string
+  modeInput?: string
+  gradient?: string
+  gradientStop?: string
+  gradientStopActive?: string
   saturation?: string
   saturationPointer?: string
   hue?: string
@@ -14,10 +24,18 @@ export type ReactColorPickerClassNames = {
   alphaPointer?: string
   eyedrop?: string
   eyedropIcon?: string
+  controls?: string
 }
 
 export type ReactColorPickerStyles = {
   root?: CSSProperties
+  modeToggle?: CSSProperties
+  modeOption?: CSSProperties
+  modeOptionActive?: CSSProperties
+  modeInput?: CSSProperties
+  gradient?: CSSProperties
+  gradientStop?: CSSProperties
+  gradientStopActive?: CSSProperties
   saturation?: CSSProperties
   saturationPointer?: CSSProperties
   hue?: CSSProperties
@@ -26,11 +44,15 @@ export type ReactColorPickerStyles = {
   alphaPointer?: CSSProperties
   eyedrop?: CSSProperties
   eyedropIcon?: CSSProperties
+  controls?: CSSProperties
 }
 
 export type ReactColorPickerProps = {
   value?: string
   onChange?: (color: string) => void
+  mode?: ReactColorPickerMode
+  defaultActiveMode?: ReactColorPickerActiveMode
+  onModeChange?: (mode: ReactColorPickerActiveMode) => void
   classNames?: ReactColorPickerClassNames
   styles?: ReactColorPickerStyles
   hideEyedrop?: boolean
@@ -38,6 +60,8 @@ export type ReactColorPickerProps = {
 }
 
 const DEFAULT_COLOR = '#ffffff'
+const DEFAULT_GRADIENT_END_COLOR = '#000000'
+const DEFAULT_GRADIENT_ANGLE = 90
 
 type RGB = {
   r: number
@@ -53,6 +77,18 @@ type HSV = {
 
 type HSVA = HSV & {
   a: number
+}
+
+type GradientStopIndex = 0 | 1
+
+type GradientStop = {
+  color: HSVA
+  position: number
+}
+
+type LinearGradient = {
+  angle: number
+  stops: [GradientStop, GradientStop]
 }
 
 type EyeDropperConstructor = new () => {
@@ -132,14 +168,21 @@ function parseCssRgbColor(value: string): { rgb: RGB; a: number } | null {
   }
 }
 
-function parseColor(value: string): HSVA {
-  const parsedColor =
-    parseHexColor(value) ?? parseCssRgbColor(value) ?? parseHexColor(DEFAULT_COLOR)!
+function parseColorValue(value: string): HSVA | null {
+  const parsedColor = parseHexColor(value) ?? parseCssRgbColor(value)
+
+  if (!parsedColor) {
+    return null
+  }
 
   return {
     ...rgbToHsv(parsedColor.rgb),
     a: parsedColor.a,
   }
+}
+
+function parseColor(value: string): HSVA {
+  return parseColorValue(value) ?? parseColorValue(DEFAULT_COLOR)!
 }
 
 function rgbToHsv({ r, g, b }: RGB): HSV {
@@ -241,43 +284,254 @@ function formatColor(hsva: HSVA) {
   return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${formatAlpha(hsva.a)})`
 }
 
+function formatPercent(value: number) {
+  return Number(clamp(value, 0, 100).toFixed(2))
+}
+
+function formatLinearGradient(gradient: LinearGradient) {
+  const [from, to] = gradient.stops
+
+  return `linear-gradient(${gradient.angle}deg, ${formatColor(from.color)} ${formatPercent(
+    from.position
+  )}%, ${formatColor(to.color)} ${formatPercent(to.position)}%)`
+}
+
+function splitByTopLevelCommas(value: string) {
+  const parts: string[] = []
+  let current = ''
+  let depth = 0
+
+  for (const character of value) {
+    if (character === '(') {
+      depth += 1
+    }
+
+    if (character === ')') {
+      depth -= 1
+    }
+
+    if (character === ',' && depth === 0) {
+      parts.push(current.trim())
+      current = ''
+      continue
+    }
+
+    current += character
+  }
+
+  if (current.trim()) {
+    parts.push(current.trim())
+  }
+
+  return parts
+}
+
+function parseGradientAngle(value: string) {
+  const angle = value.trim().match(/^([+-]?\d*\.?\d+)deg$/i)
+
+  if (angle) {
+    return clamp(Number(angle[1]), 0, 360)
+  }
+
+  const direction = value.trim().toLowerCase()
+
+  if (direction === 'to right') return 90
+  if (direction === 'to bottom') return 180
+  if (direction === 'to left') return 270
+  if (direction === 'to top') return 0
+
+  return null
+}
+
+function parseGradientStop(value: string, fallbackPosition: number): GradientStop | null {
+  const positionMatch = value.match(/\s+([+-]?\d*\.?\d+)%\s*$/)
+  const position = positionMatch ? Number(positionMatch[1]) : fallbackPosition
+  const colorValue = positionMatch ? value.slice(0, positionMatch.index).trim() : value.trim()
+  const color = parseColorValue(colorValue)
+
+  if (!color) {
+    return null
+  }
+
+  return {
+    color,
+    position: clamp(position, 0, 100),
+  }
+}
+
+function createDefaultGradient(): LinearGradient {
+  return {
+    angle: DEFAULT_GRADIENT_ANGLE,
+    stops: [
+      { color: parseColor(DEFAULT_COLOR), position: 0 },
+      { color: parseColor(DEFAULT_GRADIENT_END_COLOR), position: 100 },
+    ],
+  }
+}
+
+function createGradientFromColor(value: string): LinearGradient {
+  return {
+    angle: DEFAULT_GRADIENT_ANGLE,
+    stops: [
+      { color: parseColor(value), position: 0 },
+      { color: parseColor(DEFAULT_GRADIENT_END_COLOR), position: 100 },
+    ],
+  }
+}
+
+function parseLinearGradient(value: string): LinearGradient {
+  const gradientMatch = value.trim().match(/^linear-gradient\((.*)\)$/i)
+
+  if (!gradientMatch) {
+    return createGradientFromColor(value)
+  }
+
+  const parts = splitByTopLevelCommas(gradientMatch[1])
+
+  if (parts.length < 2) {
+    return createDefaultGradient()
+  }
+
+  const parsedAngle = parseGradientAngle(parts[0])
+  const stopParts = parsedAngle === null ? parts : parts.slice(1)
+
+  if (stopParts.length < 2) {
+    return createDefaultGradient()
+  }
+
+  const firstStop = parseGradientStop(stopParts[0], 0)
+  const secondStop = parseGradientStop(stopParts[1], 100)
+
+  if (!firstStop || !secondStop) {
+    return createDefaultGradient()
+  }
+
+  return {
+    angle: parsedAngle ?? DEFAULT_GRADIENT_ANGLE,
+    stops: [firstStop, secondStop],
+  }
+}
+
+function preserveHue(nextHsva: HSVA, currentHsva: HSVA) {
+  return {
+    h: nextHsva.s === 0 || nextHsva.v === 0 ? currentHsva.h : nextHsva.h,
+    s: nextHsva.s,
+    v: nextHsva.v,
+    a: nextHsva.a,
+  }
+}
+
+function updateGradientStopColor(
+  gradient: LinearGradient,
+  selectedGradientStop: GradientStopIndex,
+  color: HSVA
+): LinearGradient {
+  return {
+    ...gradient,
+    stops: gradient.stops.map((stop, index) =>
+      index === selectedGradientStop ? { ...stop, color } : stop
+    ) as [GradientStop, GradientStop],
+  }
+}
+
+function updateGradientStopPosition(
+  gradient: LinearGradient,
+  selectedGradientStop: GradientStopIndex,
+  position: number
+): LinearGradient {
+  const min = selectedGradientStop === 0 ? 0 : gradient.stops[0].position
+  const max = selectedGradientStop === 0 ? gradient.stops[1].position : 100
+  const clampedPosition = clamp(position, min, max)
+
+  return {
+    ...gradient,
+    stops: gradient.stops.map((stop, index) =>
+      index === selectedGradientStop ? { ...stop, position: clampedPosition } : stop
+    ) as [GradientStop, GradientStop],
+  }
+}
+
 export function ReactColorPicker({
   value = DEFAULT_COLOR,
   onChange,
+  mode = 'both',
+  defaultActiveMode = 'solid',
+  onModeChange,
   classNames,
   styles,
   hideEyedrop = false,
   hideOpacityControl = false,
 }: ReactColorPickerProps) {
   const colorInputRef = useRef<HTMLInputElement>(null)
-  const lastEmittedColorRef = useRef<string | null>(null)
+  const gradientRef = useRef<HTMLDivElement>(null)
+  const draggingGradientStopRef = useRef<GradientStopIndex | null>(null)
+  const lastEmittedValueRef = useRef<string | null>(null)
+  const modeInputName = useId()
 
+  const [internalActiveMode, setInternalActiveMode] = useState<ReactColorPickerActiveMode>(() =>
+    mode === 'both' ? defaultActiveMode : mode
+  )
   const [hsva, setHsva] = useState<HSVA>(() => parseColor(value))
+  const [gradient, setGradient] = useState<LinearGradient>(() => parseLinearGradient(value))
+  const [selectedGradientStop, setSelectedGradientStop] = useState<GradientStopIndex>(0)
+
+  const activeMode = mode === 'both' ? internalActiveMode : mode
+  const shouldShowModeToggle = mode === 'both'
 
   useEffect(() => {
-    const nextColor = parseColor(value)
-    const nextFormattedColor = formatColor(nextColor)
+    if (activeMode === 'gradient') {
+      const nextGradient = parseLinearGradient(value)
+      const nextFormattedGradient = formatLinearGradient(nextGradient)
 
-    if (lastEmittedColorRef.current === nextFormattedColor) {
+      if (lastEmittedValueRef.current === nextFormattedGradient) {
+        return
+      }
+
+      setGradient((currentGradient) => ({
+        angle: nextGradient.angle,
+        stops: [
+          {
+            position: nextGradient.stops[0].position,
+            color: preserveHue(nextGradient.stops[0].color, currentGradient.stops[0].color),
+          },
+          {
+            position: nextGradient.stops[1].position,
+            color: preserveHue(nextGradient.stops[1].color, currentGradient.stops[1].color),
+          },
+        ],
+      }))
+
       return
     }
 
-    setHsva((currentHsva) => ({
-      h: nextColor.s === 0 || nextColor.v === 0 ? currentHsva.h : nextColor.h,
-      s: nextColor.s,
-      v: nextColor.v,
-      a: nextColor.a,
-    }))
-  }, [value])
+    const nextColor = parseColor(value)
+    const nextFormattedColor = formatColor(nextColor)
 
-  const rgb = hsvToRgb(hsva)
-  const color = formatColor(hsva)
+    if (lastEmittedValueRef.current === nextFormattedColor) {
+      return
+    }
+
+    setHsva((currentHsva) => preserveHue(nextColor, currentHsva))
+  }, [activeMode, value])
+
+  const activeHsva = activeMode === 'gradient' ? gradient.stops[selectedGradientStop].color : hsva
+  const rgb = hsvToRgb(activeHsva)
+  const color = formatColor(activeHsva)
   const solidColor = rgbToHex(rgb)
-  const hueColor = hsvToHex({ h: hsva.h, s: 100, v: 100 })
+  const hueColor = hsvToHex({ h: activeHsva.h, s: 100, v: 100 })
+  const gradientValue = formatLinearGradient(gradient)
   const alphaGradient = `
     linear-gradient(to right, rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, 0), rgb(${rgb.r}, ${rgb.g}, ${rgb.b})),
     repeating-conic-gradient(#fff 0% 25%, #c9c9c9 0% 50%) 50% / 12px 12px
   `
+
+  function emitGradient(nextGradient: LinearGradient) {
+    const nextValue = formatLinearGradient(nextGradient)
+
+    setGradient(nextGradient)
+    lastEmittedValueRef.current = nextValue
+    onChange?.(nextValue)
+  }
 
   function updateColor(nextHsva: HSVA) {
     const clampedHsva = {
@@ -287,11 +541,37 @@ export function ReactColorPicker({
       a: clamp(nextHsva.a, 0, 100),
     }
 
+    if (activeMode === 'gradient') {
+      emitGradient(updateGradientStopColor(gradient, selectedGradientStop, clampedHsva))
+      return
+    }
+
     const nextColor = formatColor(clampedHsva)
 
     setHsva(clampedHsva)
-    lastEmittedColorRef.current = nextColor
+    lastEmittedValueRef.current = nextColor
     onChange?.(nextColor)
+  }
+
+  function getGradientPosition(clientX: number) {
+    const rect = gradientRef.current?.getBoundingClientRect()
+
+    if (!rect || rect.width === 0) {
+      return null
+    }
+
+    return clamp(((clientX - rect.left) / rect.width) * 100, 0, 100)
+  }
+
+  function getNearestGradientStop(position: number): GradientStopIndex {
+    const firstDistance = Math.abs(position - gradient.stops[0].position)
+    const secondDistance = Math.abs(position - gradient.stops[1].position)
+
+    return firstDistance <= secondDistance ? 0 : 1
+  }
+
+  function moveGradientStop(stopIndex: GradientStopIndex, position: number) {
+    emitGradient(updateGradientStopPosition(gradient, stopIndex, position))
   }
 
   function updateSaturation(event: PointerEvent<HTMLDivElement>) {
@@ -301,10 +581,10 @@ export function ReactColorPicker({
     const y = clamp((event.clientY - rect.top) / rect.height, 0, 1)
 
     updateColor({
-      h: hsva.h,
+      h: activeHsva.h,
       s: x * 100,
       v: 100 - y * 100,
-      a: hsva.a,
+      a: activeHsva.a,
     })
   }
 
@@ -314,9 +594,9 @@ export function ReactColorPicker({
 
     updateColor({
       h: x * 359,
-      s: hsva.s,
-      v: hsva.v,
-      a: hsva.a,
+      s: activeHsva.s,
+      v: activeHsva.v,
+      a: activeHsva.a,
     })
   }
 
@@ -325,9 +605,95 @@ export function ReactColorPicker({
     const x = clamp((event.clientX - rect.left) / rect.width, 0, 1)
 
     updateColor({
-      ...hsva,
+      ...activeHsva,
       a: x * 100,
     })
+  }
+
+  function handleGradientPointerDown(event: PointerEvent<HTMLDivElement>) {
+    const position = getGradientPosition(event.clientX)
+
+    if (position === null) return
+
+    const stopIndex = getNearestGradientStop(position)
+
+    draggingGradientStopRef.current = stopIndex
+    setSelectedGradientStop(stopIndex)
+    event.currentTarget.setPointerCapture(event.pointerId)
+    moveGradientStop(stopIndex, position)
+  }
+
+  function handleGradientPointerMove(event: PointerEvent<HTMLDivElement>) {
+    if (event.buttons !== 1) return
+
+    const stopIndex = draggingGradientStopRef.current
+    const position = getGradientPosition(event.clientX)
+
+    if (stopIndex === null || position === null) return
+
+    moveGradientStop(stopIndex, position)
+  }
+
+  function handleGradientPointerUp(event: PointerEvent<HTMLDivElement>) {
+    draggingGradientStopRef.current = null
+    event.currentTarget.releasePointerCapture(event.pointerId)
+  }
+
+  function handleGradientStopPointerDown(
+    event: PointerEvent<HTMLButtonElement>,
+    stopIndex: GradientStopIndex
+  ) {
+    event.preventDefault()
+    event.stopPropagation()
+    draggingGradientStopRef.current = stopIndex
+    setSelectedGradientStop(stopIndex)
+    event.currentTarget.setPointerCapture(event.pointerId)
+  }
+
+  function handleGradientStopPointerMove(
+    event: PointerEvent<HTMLButtonElement>,
+    stopIndex: GradientStopIndex
+  ) {
+    if (event.buttons !== 1) return
+
+    const position = getGradientPosition(event.clientX)
+
+    if (position === null) return
+
+    moveGradientStop(stopIndex, position)
+  }
+
+  function handleGradientStopPointerUp(event: PointerEvent<HTMLButtonElement>) {
+    draggingGradientStopRef.current = null
+    event.currentTarget.releasePointerCapture(event.pointerId)
+  }
+
+  function handleGradientStopKeyDown(
+    event: KeyboardEvent<HTMLButtonElement>,
+    stopIndex: GradientStopIndex
+  ) {
+    const step = event.shiftKey ? 10 : 1
+    const currentPosition = gradient.stops[stopIndex].position
+
+    if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+      event.preventDefault()
+      moveGradientStop(stopIndex, currentPosition - step)
+    }
+
+    if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      moveGradientStop(stopIndex, currentPosition + step)
+    }
+
+    if (event.key === 'Home') {
+      event.preventDefault()
+      moveGradientStop(stopIndex, stopIndex === 0 ? 0 : gradient.stops[0].position)
+    }
+
+    if (event.key === 'End') {
+      event.preventDefault()
+      moveGradientStop(stopIndex, stopIndex === 0 ? gradient.stops[1].position : 100)
+    }
   }
 
   function handleSaturationPointerDown(event: PointerEvent<HTMLDivElement>) {
@@ -365,22 +731,22 @@ export function ReactColorPicker({
 
     if (event.key === 'ArrowLeft') {
       event.preventDefault()
-      updateColor({ ...hsva, s: hsva.s - step })
+      updateColor({ ...activeHsva, s: activeHsva.s - step })
     }
 
     if (event.key === 'ArrowRight') {
       event.preventDefault()
-      updateColor({ ...hsva, s: hsva.s + step })
+      updateColor({ ...activeHsva, s: activeHsva.s + step })
     }
 
     if (event.key === 'ArrowUp') {
       event.preventDefault()
-      updateColor({ ...hsva, v: hsva.v + step })
+      updateColor({ ...activeHsva, v: activeHsva.v + step })
     }
 
     if (event.key === 'ArrowDown') {
       event.preventDefault()
-      updateColor({ ...hsva, v: hsva.v - step })
+      updateColor({ ...activeHsva, v: activeHsva.v - step })
     }
   }
 
@@ -389,12 +755,12 @@ export function ReactColorPicker({
 
     if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
       event.preventDefault()
-      updateColor({ ...hsva, h: hsva.h - step })
+      updateColor({ ...activeHsva, h: activeHsva.h - step })
     }
 
     if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
       event.preventDefault()
-      updateColor({ ...hsva, h: hsva.h + step })
+      updateColor({ ...activeHsva, h: activeHsva.h + step })
     }
   }
 
@@ -403,24 +769,19 @@ export function ReactColorPicker({
 
     if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
       event.preventDefault()
-      updateColor({ ...hsva, a: hsva.a - step })
+      updateColor({ ...activeHsva, a: activeHsva.a - step })
     }
 
     if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
       event.preventDefault()
-      updateColor({ ...hsva, a: hsva.a + step })
+      updateColor({ ...activeHsva, a: activeHsva.a + step })
     }
   }
 
   function updateFromPickedColor(nextColor: string) {
     const nextHsva = parseColor(nextColor)
 
-    updateColor({
-      h: nextHsva.s === 0 || nextHsva.v === 0 ? hsva.h : nextHsva.h,
-      s: nextHsva.s,
-      v: nextHsva.v,
-      a: nextHsva.a,
-    })
+    updateColor(preserveHue(nextHsva, activeHsva))
   }
 
   async function handlePickerClick() {
@@ -442,6 +803,39 @@ export function ReactColorPicker({
 
   function handleNativePickerChange(event: ChangeEvent<HTMLInputElement>) {
     updateFromPickedColor(event.target.value)
+  }
+
+  function handleModeChange(event: ChangeEvent<HTMLInputElement>) {
+    const nextMode = event.target.value as ReactColorPickerActiveMode
+
+    setInternalActiveMode(nextMode)
+    onModeChange?.(nextMode)
+
+    if (nextMode === 'gradient') {
+      const nextGradient = {
+        ...gradient,
+        stops: [
+          {
+            ...gradient.stops[0],
+            color: hsva,
+          },
+          gradient.stops[1],
+        ],
+      } satisfies LinearGradient
+      const nextValue = formatLinearGradient(nextGradient)
+
+      setGradient(nextGradient)
+      setSelectedGradientStop(0)
+      lastEmittedValueRef.current = nextValue
+      onChange?.(nextValue)
+      return
+    }
+
+    const nextColor = formatColor(gradient.stops[selectedGradientStop].color)
+
+    setHsva(gradient.stops[selectedGradientStop].color)
+    lastEmittedValueRef.current = nextColor
+    onChange?.(nextColor)
   }
 
   return (
@@ -466,8 +860,8 @@ export function ReactColorPicker({
         <div
           className={cx(css.saturationPointer, classNames?.saturationPointer)}
           style={{
-            left: `${hsva.s}%`,
-            top: `${100 - hsva.v}%`,
+            left: `${activeHsva.s}%`,
+            top: `${100 - activeHsva.v}%`,
             backgroundColor: color,
             ...styles?.saturationPointer,
           }}
@@ -482,7 +876,7 @@ export function ReactColorPicker({
         aria-label="Hue"
         aria-valuemin={0}
         aria-valuemax={359}
-        aria-valuenow={Math.round(hsva.h)}
+        aria-valuenow={Math.round(activeHsva.h)}
         onPointerDown={handleHuePointerDown}
         onPointerMove={handleHuePointerMove}
         onKeyDown={handleHueKeyDown}
@@ -490,7 +884,7 @@ export function ReactColorPicker({
         <div
           className={cx(css.huePointer, classNames?.huePointer)}
           style={{
-            left: `${(hsva.h / 359) * 100}%`,
+            left: `${(activeHsva.h / 359) * 100}%`,
             ...styles?.huePointer,
           }}
         />
@@ -508,8 +902,8 @@ export function ReactColorPicker({
           aria-label="Alpha"
           aria-valuemin={0}
           aria-valuemax={100}
-          aria-valuenow={Math.round(hsva.a)}
-          aria-valuetext={`${Math.round(hsva.a)}%`}
+          aria-valuenow={Math.round(activeHsva.a)}
+          aria-valuetext={`${Math.round(activeHsva.a)}%`}
           onPointerDown={handleAlphaPointerDown}
           onPointerMove={handleAlphaPointerMove}
           onKeyDown={handleAlphaKeyDown}
@@ -517,7 +911,7 @@ export function ReactColorPicker({
           <div
             className={cx(css.alphaPointer, classNames?.alphaPointer)}
             style={{
-              left: `${hsva.a}%`,
+              left: `${activeHsva.a}%`,
               backgroundColor: solidColor,
               ...styles?.alphaPointer,
             }}
@@ -525,26 +919,142 @@ export function ReactColorPicker({
         </div>
       )}
 
-      {!hideEyedrop && (
-        <button
-          className={cx(css.eyedrop, classNames?.eyedrop)}
-          style={styles?.eyedrop}
-          type="button"
-          aria-label="Pick a color"
-          title="Pick a color"
-          onClick={handlePickerClick}
+      {activeMode === 'gradient' && (
+        <div
+          ref={gradientRef}
+          className={cx(css.gradient, classNames?.gradient)}
+          style={{
+            background: gradientValue,
+            ...styles?.gradient,
+          }}
+          role="group"
+          aria-label="Gradient color stops"
+          onPointerDown={handleGradientPointerDown}
+          onPointerMove={handleGradientPointerMove}
+          onPointerUp={handleGradientPointerUp}
+          onLostPointerCapture={() => {
+            draggingGradientStopRef.current = null
+          }}
         >
-          <svg
-            className={cx(css.eyedropIcon, classNames?.eyedropIcon)}
-            style={styles?.eyedropIcon}
-            viewBox="0 -960 960 960"
-            fill="currentColor"
-            aria-hidden="true"
-          >
-            <path d="M120-120v-190l358-358-58-56 58-56 76 76 124-124q5-5 12.5-8t15.5-3q8 0 15 3t13 8l94 94q5 6 8 13t3 15q0 8-3 15.5t-8 12.5L705-555l76 78-57 57-56-58-358 358H120Zm80-80h78l332-334-76-76-334 332v78Zm447-410 96-96-37-37-96 96 37 37Zm0 0-37-37 37 37Z" />
-          </svg>
-        </button>
+          {gradient.stops.map((stop, index) => {
+            const stopIndex = index as GradientStopIndex
+            const isSelected = selectedGradientStop === stopIndex
+
+            return (
+              <button
+                key={stopIndex}
+                className={cx(
+                  css.gradientStop,
+                  isSelected && css.gradientStopActive,
+                  classNames?.gradientStop,
+                  isSelected && classNames?.gradientStopActive
+                )}
+                style={{
+                  left: `${stop.position}%`,
+                  background: formatColor(stop.color),
+                  ...styles?.gradientStop,
+                  ...(isSelected ? styles?.gradientStopActive : undefined),
+                }}
+                type="button"
+                role="slider"
+                aria-label={`Gradient stop ${stopIndex + 1} position`}
+                aria-valuemin={stopIndex === 0 ? 0 : Math.round(gradient.stops[0].position)}
+                aria-valuemax={stopIndex === 0 ? Math.round(gradient.stops[1].position) : 100}
+                aria-valuenow={Math.round(stop.position)}
+                aria-valuetext={`${Math.round(stop.position)}%`}
+                aria-pressed={isSelected}
+                onClick={() => setSelectedGradientStop(stopIndex)}
+                onPointerDown={(event) => handleGradientStopPointerDown(event, stopIndex)}
+                onPointerMove={(event) => handleGradientStopPointerMove(event, stopIndex)}
+                onPointerUp={handleGradientStopPointerUp}
+                onLostPointerCapture={() => {
+                  draggingGradientStopRef.current = null
+                }}
+                onKeyDown={(event) => handleGradientStopKeyDown(event, stopIndex)}
+              />
+            )
+          })}
+        </div>
       )}
+
+      <div className={cx(css.controls, classNames?.controls)}>
+        {shouldShowModeToggle && (
+          <div
+            className={cx(css.modeToggle, classNames?.modeToggle)}
+            style={styles?.modeToggle}
+            role="radiogroup"
+            aria-label="Color picker mode"
+          >
+            <label
+              className={cx(
+                css.modeOption,
+                activeMode === 'solid' && css.modeOptionActive,
+                classNames?.modeOption,
+                activeMode === 'solid' && classNames?.modeOptionActive
+              )}
+              style={{
+                ...styles?.modeOption,
+                ...(activeMode === 'solid' ? styles?.modeOptionActive : undefined),
+              }}
+            >
+              <input
+                className={cx(css.modeInput, classNames?.modeInput)}
+                style={styles?.modeInput}
+                type="radio"
+                name={modeInputName}
+                value="solid"
+                checked={activeMode === 'solid'}
+                onChange={handleModeChange}
+              />
+              Solid
+            </label>
+
+            <label
+              className={cx(
+                css.modeOption,
+                activeMode === 'gradient' && css.modeOptionActive,
+                classNames?.modeOption,
+                activeMode === 'gradient' && classNames?.modeOptionActive
+              )}
+              style={{
+                ...styles?.modeOption,
+                ...(activeMode === 'gradient' ? styles?.modeOptionActive : undefined),
+              }}
+            >
+              <input
+                className={cx(css.modeInput, classNames?.modeInput)}
+                style={styles?.modeInput}
+                type="radio"
+                name={modeInputName}
+                value="gradient"
+                checked={activeMode === 'gradient'}
+                onChange={handleModeChange}
+              />
+              Gradient
+            </label>
+          </div>
+        )}
+        {!hideEyedrop && (
+          <button
+            className={cx(css.eyedrop, classNames?.eyedrop)}
+            style={styles?.eyedrop}
+            type="button"
+            aria-label="Pick a color"
+            title="Pick a color"
+            onClick={handlePickerClick}
+          >
+            <svg
+              className={cx(css.eyedropIcon, classNames?.eyedropIcon)}
+              style={styles?.eyedropIcon}
+              viewBox="0 -960 960 960"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path d="M120-120v-190l358-358-58-56 58-56 76 76 124-124q5-5 12.5-8t15.5-3q8 0 15 3t13 8l94 94q5 6 8 13t3 15q0 8-3 15.5t-8 12.5L705-555l76 78-57 57-56-58-358 358H120Zm80-80h78l332-334-76-76-334 332v78Zm447-410 96-96-37-37-96 96 37 37Zm0 0-37-37 37 37Z" />
+            </svg>
+          </button>
+        )}
+      </div>
 
       <input
         ref={colorInputRef}
