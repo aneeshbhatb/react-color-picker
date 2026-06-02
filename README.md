@@ -56,12 +56,14 @@ Invalid values fall back to `#ffffff`.
 
 ## Props
 
-| Prop         | Type                         | Default     | Description                                                                          |
-| ------------ |------------------------------| ----------- | ------------------------------------------------------------------------------------ |
-| `value`      | `string`                     | `'#ffffff'` | The current color value. Accepts hex or `rgb()`/`rgba()`.                            |
-| `onChange`   | `(color: string) => void`    | —           | Called whenever the color changes. Emits hex when fully opaque, `rgba()` otherwise.  |
-| `classNames` | `ReactColorPickerClassNames` | —           | Custom class names for individual parts of the picker.                               |
-| `styles`     | `ReactColorPickerStyles`     | —           | Inline style overrides for individual parts of the picker.                           |
+| Prop                   | Type                         | Default     | Description                                                                          |
+| ---------------------- |------------------------------| ----------- | ------------------------------------------------------------------------------------ |
+| `value`                | `string`                     | `'#ffffff'` | The current color value. Accepts hex or `rgb()`/`rgba()`.                            |
+| `onChange`             | `(color: string) => void`    | —           | Called whenever the color changes. Emits hex when fully opaque, `rgba()` otherwise.  |
+| `classNames`           | `ReactColorPickerClassNames` | —           | Custom class names for individual parts of the picker.                               |
+| `styles`               | `ReactColorPickerStyles`     | —           | Inline style overrides for individual parts of the picker.                           |
+| `hideEyedrop`          | `boolean`                    | `false`     | Hides the eyedropper button.                                                         |
+| `hideOpacityControl`   | `boolean`                    | `false`     | Hides the alpha/opacity slider.                                                      |
 
 ### `ReactColorPickerClassNames` / `ReactColorPickerStyles`
 

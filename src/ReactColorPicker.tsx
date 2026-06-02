@@ -34,6 +34,7 @@ export type ReactColorPickerProps = {
   classNames?: ReactColorPickerClassNames
   styles?: ReactColorPickerStyles
   hideEyedrop?: boolean
+  hideOpacityControl?: boolean
 }
 
 const DEFAULT_COLOR = '#ffffff'
@@ -246,6 +247,7 @@ export function ReactColorPicker({
   classNames,
   styles,
   hideEyedrop = false,
+  hideOpacityControl = false,
 }: ReactColorPickerProps) {
   const colorInputRef = useRef<HTMLInputElement>(null)
   const lastEmittedColorRef = useRef<string | null>(null)
@@ -494,32 +496,34 @@ export function ReactColorPicker({
         />
       </div>
 
-      <div
-        className={cx(css.alpha, classNames?.alpha)}
-        style={{
-          background: alphaGradient,
-          ...styles?.alpha,
-        }}
-        role="slider"
-        tabIndex={0}
-        aria-label="Alpha"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(hsva.a)}
-        aria-valuetext={`${Math.round(hsva.a)}%`}
-        onPointerDown={handleAlphaPointerDown}
-        onPointerMove={handleAlphaPointerMove}
-        onKeyDown={handleAlphaKeyDown}
-      >
+      {!hideOpacityControl && (
         <div
-          className={cx(css.alphaPointer, classNames?.alphaPointer)}
+          className={cx(css.alpha, classNames?.alpha)}
           style={{
-            left: `${hsva.a}%`,
-            backgroundColor: solidColor,
-            ...styles?.alphaPointer,
+            background: alphaGradient,
+            ...styles?.alpha,
           }}
-        />
-      </div>
+          role="slider"
+          tabIndex={0}
+          aria-label="Alpha"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(hsva.a)}
+          aria-valuetext={`${Math.round(hsva.a)}%`}
+          onPointerDown={handleAlphaPointerDown}
+          onPointerMove={handleAlphaPointerMove}
+          onKeyDown={handleAlphaKeyDown}
+        >
+          <div
+            className={cx(css.alphaPointer, classNames?.alphaPointer)}
+            style={{
+              left: `${hsva.a}%`,
+              backgroundColor: solidColor,
+              ...styles?.alphaPointer,
+            }}
+          />
+        </div>
+      )}
 
       {!hideEyedrop && (
         <button
