@@ -10,6 +10,7 @@ export type ReactColorPickerMode = ReactColorPickerActiveMode | 'both'
 export type ReactColorPickerClassNames = {
   root?: string
   modeToggle?: string
+  modeThumb?: string
   modeOption?: string
   modeOptionActive?: string
   modeInput?: string
@@ -30,6 +31,7 @@ export type ReactColorPickerClassNames = {
 export type ReactColorPickerStyles = {
   root?: CSSProperties
   modeToggle?: CSSProperties
+  modeThumb?: CSSProperties
   modeOption?: CSSProperties
   modeOptionActive?: CSSProperties
   modeInput?: CSSProperties
@@ -1026,7 +1028,13 @@ export function ReactColorPicker({
             style={styles?.modeToggle}
             role="radiogroup"
             aria-label="Color picker mode"
+            data-active-mode={activeMode}
           >
+            <span
+              className={cx(css.modeThumb, classNames?.modeThumb)}
+              style={styles?.modeThumb}
+              aria-hidden="true"
+            />
             <label
               className={cx(
                 css.modeOption,
