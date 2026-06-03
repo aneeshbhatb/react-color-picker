@@ -48,15 +48,28 @@ export type ReactColorPickerStyles = {
 }
 
 export type ReactColorPickerProps = {
+  /** The current color. Accepts hex (`#f00`, `#ff0000ff`), `rgb()`/`rgba()`, or a `linear-gradient(...)` string. Invalid values fall back to `#ffffff`. */
   value?: string
+  /** Called whenever the color changes. Emits a hex string when fully opaque, `rgba()` when the alpha is below 100%, or a `linear-gradient(...)` string in gradient mode. */
   onChange?: (color: string) => void
+  /** Which modes are available. `'both'` shows the switcher; `'solid'`/`'gradient'` locks to a single mode. */
   mode?: ReactColorPickerMode
-  defaultActiveMode?: ReactColorPickerActiveMode
+  /** Initial active mode when uncontrolled and `mode` is `'both'`. */
+  defaultMode?: ReactColorPickerActiveMode
+  /** Controlled active mode. When provided, the parent owns the value (pair with `onModeChange`). */
+  activeMode?: ReactColorPickerActiveMode
+  /** Called when the active mode changes, from the built-in switcher or an internal switch. Wire to your state setter to keep a controlled `activeMode` in sync. */
   onModeChange?: (mode: ReactColorPickerActiveMode) => void
+  /** Custom class names for individual parts of the picker. See `ReactColorPickerClassNames` for the available slots. */
   classNames?: ReactColorPickerClassNames
+  /** Inline style overrides for individual parts of the picker. See `ReactColorPickerStyles` for the available slots. */
   styles?: ReactColorPickerStyles
+  /** Hides the eyedropper button. */
   hideEyedrop?: boolean
+  /** Hides the alpha/opacity slider. */
   hideOpacityControl?: boolean
+  /** Hides the built-in solid/gradient switcher (e.g. when supplying your own). */
+  hideModeSwitcher?: boolean
 }
 
 const DEFAULT_COLOR = '#ffffff'
@@ -455,12 +468,14 @@ export function ReactColorPicker({
   value = DEFAULT_COLOR,
   onChange,
   mode = 'both',
-  defaultActiveMode = 'solid',
+  defaultMode = 'solid',
+  activeMode: controlledActiveMode,
   onModeChange,
   classNames,
   styles,
   hideEyedrop = false,
   hideOpacityControl = false,
+  hideModeSwitcher = false,
 }: ReactColorPickerProps) {
   const colorInputRef = useRef<HTMLInputElement>(null)
   const gradientRef = useRef<HTMLDivElement>(null)
@@ -469,14 +484,16 @@ export function ReactColorPicker({
   const modeInputName = useId()
 
   const [internalActiveMode, setInternalActiveMode] = useState<ReactColorPickerActiveMode>(() =>
-    mode === 'both' ? defaultActiveMode : mode
+    mode === 'both' ? defaultMode : mode
   )
   const [hsva, setHsva] = useState<HSVA>(() => parseColor(value))
   const [gradient, setGradient] = useState<LinearGradient>(() => parseLinearGradient(value))
   const [selectedGradientStop, setSelectedGradientStop] = useState<GradientStopIndex>(0)
 
-  const activeMode = mode === 'both' ? internalActiveMode : mode
-  const shouldShowModeToggle = mode === 'both'
+  // Locked mode wins; otherwise a provided `activeMode` makes the picker controlled.
+  const activeMode: ReactColorPickerActiveMode =
+    mode !== 'both' ? mode : (controlledActiveMode ?? internalActiveMode)
+  const shouldShowModeToggle = mode === 'both' && !hideModeSwitcher
 
   useEffect(() => {
     if (activeMode === 'gradient') {
@@ -513,6 +530,50 @@ export function ReactColorPicker({
 
     setHsva((currentHsva) => preserveHue(nextColor, currentHsva))
   }, [activeMode, value])
+
+  // Carries the color across a mode switch and emits the value in the new
+  // format. Declared after the value-sync effect above so its direct state
+  // writes take precedence when both run in the same commit.
+  function applyModeTransition(nextMode: ReactColorPickerActiveMode) {
+    if (nextMode === 'gradient') {
+      const nextGradient = {
+        ...gradient,
+        stops: [
+          {
+            ...gradient.stops[0],
+            color: hsva,
+          },
+          gradient.stops[1],
+        ],
+      } satisfies LinearGradient
+      const nextValue = formatLinearGradient(nextGradient)
+
+      setGradient(nextGradient)
+      setSelectedGradientStop(0)
+      lastEmittedValueRef.current = nextValue
+      onChange?.(nextValue)
+      return
+    }
+
+    const nextColor = formatColor(gradient.stops[selectedGradientStop].color)
+
+    setHsva(gradient.stops[selectedGradientStop].color)
+    lastEmittedValueRef.current = nextColor
+    onChange?.(nextColor)
+  }
+
+  // Runs the transition whenever the active mode changes from any source —
+  // the built-in switcher, a controlled `activeMode`, or a custom switcher.
+  // Skips the initial mount so no spurious onChange fires.
+  const appliedModeRef = useRef(activeMode)
+  useEffect(() => {
+    if (appliedModeRef.current === activeMode) {
+      return
+    }
+    appliedModeRef.current = activeMode
+    applyModeTransition(activeMode)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeMode])
 
   const activeHsva = activeMode === 'gradient' ? gradient.stops[selectedGradientStop].color : hsva
   const rgb = hsvToRgb(activeHsva)
@@ -805,37 +866,18 @@ export function ReactColorPicker({
     updateFromPickedColor(event.target.value)
   }
 
-  function handleModeChange(event: ChangeEvent<HTMLInputElement>) {
-    const nextMode = event.target.value as ReactColorPickerActiveMode
-
-    setInternalActiveMode(nextMode)
-    onModeChange?.(nextMode)
-
-    if (nextMode === 'gradient') {
-      const nextGradient = {
-        ...gradient,
-        stops: [
-          {
-            ...gradient.stops[0],
-            color: hsva,
-          },
-          gradient.stops[1],
-        ],
-      } satisfies LinearGradient
-      const nextValue = formatLinearGradient(nextGradient)
-
-      setGradient(nextGradient)
-      setSelectedGradientStop(0)
-      lastEmittedValueRef.current = nextValue
-      onChange?.(nextValue)
-      return
+  // Flips the active mode. Respects controlled vs. uncontrolled; the value
+  // conversion itself is handled by the mode-transition effect, so this runs
+  // identically whether triggered by the built-in switcher or a custom one.
+  function changeMode(nextMode: ReactColorPickerActiveMode) {
+    if (controlledActiveMode === undefined) {
+      setInternalActiveMode(nextMode)
     }
+    onModeChange?.(nextMode)
+  }
 
-    const nextColor = formatColor(gradient.stops[selectedGradientStop].color)
-
-    setHsva(gradient.stops[selectedGradientStop].color)
-    lastEmittedValueRef.current = nextColor
-    onChange?.(nextColor)
+  function handleModeChange(event: ChangeEvent<HTMLInputElement>) {
+    changeMode(event.target.value as ReactColorPickerActiveMode)
   }
 
   return (

@@ -60,6 +60,11 @@ Invalid values fall back to `#ffffff`.
 | ---------------------- |------------------------------| ----------- | ------------------------------------------------------------------------------------ |
 | `value`                | `string`                     | `'#ffffff'` | The current color value. Accepts hex or `rgb()`/`rgba()`.                            |
 | `onChange`             | `(color: string) => void`    | —           | Called whenever the color changes. Emits hex when fully opaque, `rgba()` otherwise.  |
+| `mode`                 | `'solid' \| 'gradient' \| 'both'` | `'both'` | Which modes are available. `'both'` shows the switcher; a single value locks the picker to that mode. |
+| `defaultMode`          | `'solid' \| 'gradient'`      | `'solid'`   | Initial active mode when `mode` is `'both'` and `activeMode` is not provided.        |
+| `activeMode`           | `'solid' \| 'gradient'`      | —           | Controlled active mode. When set, the parent owns it — pair with `onModeChange`. Enables custom switchers. |
+| `onModeChange`         | `(mode: 'solid' \| 'gradient') => void` | —  | Called when the active mode changes.                                                 |
+| `hideModeSwitcher`     | `boolean`                    | `false`     | Hides the built-in solid/gradient switcher (e.g. when supplying your own).           |
 | `classNames`           | `ReactColorPickerClassNames` | —           | Custom class names for individual parts of the picker.                               |
 | `styles`               | `ReactColorPickerStyles`     | —           | Inline style overrides for individual parts of the picker.                           |
 | `hideEyedrop`          | `boolean`                    | `false`     | Hides the eyedropper button.                                                         |
@@ -78,6 +83,50 @@ Both `classNames` and `styles` share the same slot names:
 | `huePointer`         | The draggable thumb on the hue slider        |
 | `alpha`              | The alpha slider                             |
 | `alphaPointer`       | The draggable thumb on the alpha slider      |
+
+## Solid & gradient modes
+
+By default the picker offers both solid and gradient modes with a built-in switcher.
+
+```tsx
+// Both modes, starting on gradient
+<ReactColorPicker value={color} onChange={setColor} defaultMode="gradient" />
+
+// Lock to a single mode (switcher is hidden automatically)
+<ReactColorPicker value={color} onChange={setColor} mode="solid" />
+```
+
+### Bring your own switcher
+
+Hide the built-in switcher and drive the mode yourself with the controlled
+`activeMode` / `onModeChange` pair:
+
+```tsx
+const [color, setColor] = useState('#ff0000')
+const [mode, setMode] = useState<'solid' | 'gradient'>('solid')
+
+return (
+  <>
+    <button onClick={() => setMode('solid')} aria-pressed={mode === 'solid'}>
+      Solid
+    </button>
+    <button onClick={() => setMode('gradient')} aria-pressed={mode === 'gradient'}>
+      Gradient
+    </button>
+
+    <ReactColorPicker
+      value={color}
+      onChange={setColor}
+      activeMode={mode}
+      onModeChange={setMode}
+      hideModeSwitcher
+    />
+  </>
+)
+```
+
+When `activeMode` is provided the picker is controlled: switching modes still
+carries the color across and emits the value in the new format via `onChange`.
 
 ## Customization
 
