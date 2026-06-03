@@ -1,6 +1,7 @@
 import type { GradientStop, GradientStopIndex, HSV, HSVA, LinearGradient, RGB } from './types'
 
 export const DEFAULT_COLOR = '#ffffff'
+export const DEFAULT_GRADIENT = 'linear-gradient(90deg, #fffdf6 0%, #ffe3e3 100%)'
 const DEFAULT_GRADIENT_END_COLOR = '#000000'
 const DEFAULT_GRADIENT_ANGLE = 90
 

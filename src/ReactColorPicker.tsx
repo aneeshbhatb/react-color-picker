@@ -9,6 +9,7 @@ import { Saturation } from './components/Saturation'
 import {
   clamp,
   DEFAULT_COLOR,
+  DEFAULT_GRADIENT,
   formatColor,
   formatLinearGradient,
   hsvToRgb,
@@ -37,7 +38,7 @@ export type {
 } from './types'
 
 export function ReactColorPicker({
-  value = DEFAULT_COLOR,
+  value,
   onChange,
   mode = 'both',
   defaultMode = 'solid',
@@ -51,11 +52,21 @@ export function ReactColorPicker({
 }: ReactColorPickerProps) {
   const lastEmittedValueRef = useRef<string | null>(null)
 
+  // An empty/blank `value` (e.g. `useState('')`) counts as "not supplied".
+  const providedValue = value != null && value.trim() !== '' ? value : undefined
+
+  // The active mode at mount, used to pick the right default when no `value`
+  // is supplied — gradient mode defaults to a gradient, solid mode to a color.
+  const initialActiveMode: ReactColorPickerActiveMode =
+    mode !== 'both' ? mode : (controlledActiveMode ?? defaultMode)
+  const initialValue =
+    providedValue ?? (initialActiveMode === 'gradient' ? DEFAULT_GRADIENT : DEFAULT_COLOR)
+
   const [internalActiveMode, setInternalActiveMode] = useState<ReactColorPickerActiveMode>(() =>
     mode === 'both' ? defaultMode : mode
   )
-  const [hsva, setHsva] = useState<HSVA>(() => parseColor(value))
-  const [gradient, setGradient] = useState<LinearGradient>(() => parseLinearGradient(value))
+  const [hsva, setHsva] = useState<HSVA>(() => parseColor(initialValue))
+  const [gradient, setGradient] = useState<LinearGradient>(() => parseLinearGradient(initialValue))
   const [selectedGradientStop, setSelectedGradientStop] = useState<GradientStopIndex>(0)
 
   // Locked mode wins; otherwise a provided `activeMode` makes the picker controlled.
@@ -63,9 +74,13 @@ export function ReactColorPicker({
     mode !== 'both' ? mode : (controlledActiveMode ?? internalActiveMode)
   const shouldShowModeToggle = mode === 'both' && !hideModeSwitcher
 
+  // Falls back to the mode-appropriate default whenever `value` is omitted.
+  const resolvedValue =
+    providedValue ?? (activeMode === 'gradient' ? DEFAULT_GRADIENT : DEFAULT_COLOR)
+
   useEffect(() => {
     if (activeMode === 'gradient') {
-      const nextGradient = parseLinearGradient(value)
+      const nextGradient = parseLinearGradient(resolvedValue)
       const nextFormattedGradient = formatLinearGradient(nextGradient)
 
       if (lastEmittedValueRef.current === nextFormattedGradient) {
@@ -89,7 +104,7 @@ export function ReactColorPicker({
       return
     }
 
-    const nextColor = parseColor(value)
+    const nextColor = parseColor(resolvedValue)
     const nextFormattedColor = formatColor(nextColor)
 
     if (lastEmittedValueRef.current === nextFormattedColor) {
@@ -97,7 +112,7 @@ export function ReactColorPicker({
     }
 
     setHsva((currentHsva) => preserveHue(nextColor, currentHsva))
-  }, [activeMode, value])
+  }, [activeMode, resolvedValue])
 
   // Carries the color across a mode switch and emits the value in the new
   // format. Declared after the value-sync effect above so its direct state

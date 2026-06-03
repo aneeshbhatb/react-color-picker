@@ -58,7 +58,7 @@ Invalid values fall back to `#ffffff`.
 
 | Prop                   | Type                         | Default     | Description                                                                          |
 | ---------------------- |------------------------------| ----------- | ------------------------------------------------------------------------------------ |
-| `value`                | `string`                     | `'#ffffff'` | The current color value. Accepts hex or `rgb()`/`rgba()`.                            |
+| `value`                | `string`                     | see note    | The current color value. Accepts hex, `rgb()`/`rgba()`, or a `linear-gradient(...)`. When omitted, defaults to `#ffffff` in solid mode and `linear-gradient(90deg, #fffdf6 0%, #ffe3e3 100%)` when starting in gradient mode. |
 | `onChange`             | `(color: string) => void`    | —           | Called whenever the color changes. Emits hex when fully opaque, `rgba()` otherwise.  |
 | `mode`                 | `'solid' \| 'gradient' \| 'both'` | `'both'` | Which modes are available. `'both'` shows the switcher; a single value locks the picker to that mode. |
 | `defaultMode`          | `'solid' \| 'gradient'`      | `'solid'`   | Initial active mode when `mode` is `'both'` and `activeMode` is not provided.        |
