@@ -10,9 +10,9 @@ import { Saturation } from './components/Saturation'
 import {
   clamp,
   DEFAULT_COLOR,
-  DEFAULT_GRADIENT,
   formatColor,
   formatGradient,
+  getDefaultGradientValue,
   hsvToRgb,
   parseColor,
   parseGradient,
@@ -68,14 +68,19 @@ export function ReactColorPicker({
   // is supplied — gradient mode defaults to a gradient, solid mode to a color.
   const initialActiveMode: ReactColorPickerActiveMode =
     mode !== 'both' ? mode : (controlledActiveMode ?? defaultMode)
+  const initialFallbackGradientType: ReactColorPickerGradientType =
+    gradientType !== 'both' ? gradientType : (controlledActiveGradientType ?? defaultGradientType)
   const initialValue =
-    providedValue ?? (initialActiveMode === 'gradient' ? DEFAULT_GRADIENT : DEFAULT_COLOR)
-  const initialGradient = parseGradient(initialValue, defaultGradientType)
+    providedValue ??
+    (initialActiveMode === 'gradient'
+      ? getDefaultGradientValue(initialFallbackGradientType)
+      : DEFAULT_COLOR)
+  const initialGradient = parseGradient(initialValue, initialFallbackGradientType)
   const initialGradientType: ReactColorPickerGradientType =
     gradientType !== 'both'
       ? gradientType
       : (controlledActiveGradientType ??
-        (providedValue === undefined ? defaultGradientType : initialGradient.type))
+        (providedValue === undefined ? initialFallbackGradientType : initialGradient.type))
 
   const [internalActiveMode, setInternalActiveMode] = useState<ReactColorPickerActiveMode>(() =>
     mode === 'both' ? defaultMode : mode
@@ -104,7 +109,8 @@ export function ReactColorPicker({
 
   // Falls back to the mode-appropriate default whenever `value` is omitted.
   const resolvedValue =
-    providedValue ?? (activeMode === 'gradient' ? DEFAULT_GRADIENT : DEFAULT_COLOR)
+    providedValue ??
+    (activeMode === 'gradient' ? getDefaultGradientValue(activeGradientType) : DEFAULT_COLOR)
 
   useEffect(() => {
     if (activeMode === 'gradient') {

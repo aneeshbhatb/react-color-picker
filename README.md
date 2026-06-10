@@ -60,7 +60,7 @@ Invalid values fall back to `#ffffff`.
 
 | Prop                   | Type                         | Default     | Description                                                                          |
 | ---------------------- |------------------------------| ----------- | ------------------------------------------------------------------------------------ |
-| `value`                | `string`                     | see note    | The current color value. Accepts hex, `rgb()`/`rgba()`, `linear-gradient(...)`, or `radial-gradient(...)`. When omitted, defaults to `#ffffff` in solid mode and `linear-gradient(90deg, #fffdf6 0%, #ffe3e3 100%)` when starting in gradient mode. |
+| `value`                | `string`                     | see note    | The current color value. Accepts hex, `rgb()`/`rgba()`, `linear-gradient(...)`, or `radial-gradient(...)`. When omitted, defaults to `#ffffff` in solid mode, `linear-gradient(90deg, #fffdf6 0%, #ffe3e3 100%)` for linear gradients, and `radial-gradient(circle, #fffdf6 0%, #ffe3e3 100%)` for radial gradients. |
 | `onChange`             | `(color: string) => void`    | —           | Called whenever the color changes. Emits hex when fully opaque, `rgba()` with opacity, or a CSS gradient in gradient mode. |
 | `mode`                 | `'solid' \| 'gradient' \| 'both'` | `'both'` | Which modes are available. `'both'` shows the switcher; a single value locks the picker to that mode. |
 | `defaultMode`          | `'solid' \| 'gradient'`      | `'solid'`   | Initial active mode when `mode` is `'both'` and `activeMode` is not provided.        |

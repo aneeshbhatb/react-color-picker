@@ -9,8 +9,12 @@ import type {
 } from './types'
 
 export const DEFAULT_COLOR = '#ffffff'
-export const DEFAULT_GRADIENT = 'linear-gradient(90deg, #fffdf6 0%, #ffe3e3 100%)'
-const DEFAULT_GRADIENT_END_COLOR = '#000000'
+export const DEFAULT_LINEAR_GRADIENT = 'linear-gradient(90deg, #fffdf6 0%, #ffe3e3 100%)'
+export const DEFAULT_RADIAL_GRADIENT = 'radial-gradient(circle, #fffdf6 0%, #ffe3e3 100%)'
+export const DEFAULT_GRADIENT = DEFAULT_LINEAR_GRADIENT
+const DEFAULT_GRADIENT_START_COLOR = '#fffdf6'
+const DEFAULT_GRADIENT_END_COLOR = '#ffe3e3'
+const DEFAULT_COLOR_GRADIENT_END_COLOR = '#000000'
 const DEFAULT_GRADIENT_ANGLE = 90
 
 export function clamp(value: number, min: number, max: number) {
@@ -216,6 +220,10 @@ export function formatGradient(gradient: Gradient) {
   return `linear-gradient(${gradient.angle}deg, ${stops})`
 }
 
+export function getDefaultGradientValue(type: ReactColorPickerGradientType) {
+  return type === 'radial' ? DEFAULT_RADIAL_GRADIENT : DEFAULT_LINEAR_GRADIENT
+}
+
 function splitByTopLevelCommas(value: string) {
   const parts: string[] = []
   let current = ''
@@ -284,7 +292,7 @@ function createDefaultGradient(type: ReactColorPickerGradientType = 'linear'): G
     type,
     angle: DEFAULT_GRADIENT_ANGLE,
     stops: [
-      { color: parseColor(DEFAULT_COLOR), position: 0 },
+      { color: parseColor(DEFAULT_GRADIENT_START_COLOR), position: 0 },
       { color: parseColor(DEFAULT_GRADIENT_END_COLOR), position: 100 },
     ],
   }
@@ -299,7 +307,7 @@ function createGradientFromColor(
     angle: DEFAULT_GRADIENT_ANGLE,
     stops: [
       { color: parseColor(value), position: 0 },
-      { color: parseColor(DEFAULT_GRADIENT_END_COLOR), position: 100 },
+      { color: parseColor(DEFAULT_COLOR_GRADIENT_END_COLOR), position: 100 },
     ],
   }
 }
