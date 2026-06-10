@@ -1,21 +1,21 @@
 import { useRef } from 'react'
 import type { KeyboardEvent, PointerEvent } from 'react'
 
-import { clamp, formatColor, formatLinearGradient, updateGradientStopPosition } from '../colorMath'
+import { clamp, formatColor, formatGradient, updateGradientStopPosition } from '../colorMath'
 import { cx } from '../cx'
 import css from '../ReactColorPicker.module.css'
 import type {
   GradientStopIndex,
-  LinearGradient,
+  Gradient,
   ReactColorPickerClassNames,
   ReactColorPickerStyles,
 } from '../types'
 
 type GradientBarProps = {
-  gradient: LinearGradient
+  gradient: Gradient
   selectedStop: GradientStopIndex
   onSelectStop: (stopIndex: GradientStopIndex) => void
-  onChange: (gradient: LinearGradient) => void
+  onChange: (gradient: Gradient) => void
   classNames?: ReactColorPickerClassNames
   styles?: ReactColorPickerStyles
 }
@@ -143,7 +143,7 @@ export function GradientBar({
       ref={gradientRef}
       className={cx(css.gradient, classNames?.gradient)}
       style={{
-        background: formatLinearGradient(gradient),
+        background: formatGradient(gradient),
         ...styles?.gradient,
       }}
       role="group"

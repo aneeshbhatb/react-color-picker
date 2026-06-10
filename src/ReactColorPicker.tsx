@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Alpha } from './components/Alpha'
 import { EyedropButton } from './components/EyedropButton'
 import { GradientBar } from './components/GradientBar'
+import { GradientTypeSwitcher } from './components/GradientTypeSwitcher'
 import { Hue } from './components/Hue'
 import { ModeSwitcher } from './components/ModeSwitcher'
 import { Saturation } from './components/Saturation'
@@ -11,10 +12,10 @@ import {
   DEFAULT_COLOR,
   DEFAULT_GRADIENT,
   formatColor,
-  formatLinearGradient,
+  formatGradient,
   hsvToRgb,
   parseColor,
-  parseLinearGradient,
+  parseGradient,
   preserveHue,
   rgbToHex,
   updateGradientStopColor,
@@ -22,15 +23,18 @@ import {
 import { cx } from './cx'
 import css from './ReactColorPicker.module.css'
 import type {
+  Gradient,
   GradientStopIndex,
   HSVA,
-  LinearGradient,
   ReactColorPickerActiveMode,
+  ReactColorPickerGradientType,
   ReactColorPickerProps,
 } from './types'
 
 export type {
   ReactColorPickerActiveMode,
+  ReactColorPickerGradientType,
+  ReactColorPickerGradientTypeMode,
   ReactColorPickerMode,
   ReactColorPickerClassNames,
   ReactColorPickerStyles,
@@ -44,11 +48,16 @@ export function ReactColorPicker({
   defaultMode = 'solid',
   activeMode: controlledActiveMode,
   onModeChange,
+  gradientType = 'both',
+  defaultGradientType = 'linear',
+  activeGradientType: controlledActiveGradientType,
+  onGradientTypeChange,
   classNames,
   styles,
   hideEyedrop = false,
   hideOpacityControl = false,
   hideModeSwitcher = false,
+  hideGradientTypeSwitcher = false,
 }: ReactColorPickerProps) {
   const lastEmittedValueRef = useRef<string | null>(null)
 
@@ -61,18 +70,37 @@ export function ReactColorPicker({
     mode !== 'both' ? mode : (controlledActiveMode ?? defaultMode)
   const initialValue =
     providedValue ?? (initialActiveMode === 'gradient' ? DEFAULT_GRADIENT : DEFAULT_COLOR)
+  const initialGradient = parseGradient(initialValue, defaultGradientType)
+  const initialGradientType: ReactColorPickerGradientType =
+    gradientType !== 'both'
+      ? gradientType
+      : (controlledActiveGradientType ??
+        (providedValue === undefined ? defaultGradientType : initialGradient.type))
 
   const [internalActiveMode, setInternalActiveMode] = useState<ReactColorPickerActiveMode>(() =>
     mode === 'both' ? defaultMode : mode
   )
   const [hsva, setHsva] = useState<HSVA>(() => parseColor(initialValue))
-  const [gradient, setGradient] = useState<LinearGradient>(() => parseLinearGradient(initialValue))
+  const [gradient, setGradient] = useState<Gradient>(() => ({
+    ...initialGradient,
+    type: initialGradientType,
+  }))
   const [selectedGradientStop, setSelectedGradientStop] = useState<GradientStopIndex>(0)
 
   // Locked mode wins; otherwise a provided `activeMode` makes the picker controlled.
   const activeMode: ReactColorPickerActiveMode =
     mode !== 'both' ? mode : (controlledActiveMode ?? internalActiveMode)
+  const activeGradientType: ReactColorPickerGradientType =
+    gradientType !== 'both' ? gradientType : (controlledActiveGradientType ?? gradient.type)
+  const activeGradient: Gradient =
+    gradient.type === activeGradientType ? gradient : { ...gradient, type: activeGradientType }
   const shouldShowModeToggle = mode === 'both' && !hideModeSwitcher
+  const shouldShowGradientTypeToggle =
+    activeMode === 'gradient' && gradientType === 'both' && !hideGradientTypeSwitcher
+  const shouldForceGradientType =
+    gradientType !== 'both' ||
+    controlledActiveGradientType !== undefined ||
+    providedValue === undefined
 
   // Falls back to the mode-appropriate default whenever `value` is omitted.
   const resolvedValue =
@@ -80,14 +108,19 @@ export function ReactColorPicker({
 
   useEffect(() => {
     if (activeMode === 'gradient') {
-      const nextGradient = parseLinearGradient(resolvedValue)
-      const nextFormattedGradient = formatLinearGradient(nextGradient)
+      const parsedGradient = parseGradient(resolvedValue, activeGradientType)
+      const nextGradient = {
+        ...parsedGradient,
+        type: shouldForceGradientType ? activeGradientType : parsedGradient.type,
+      } satisfies Gradient
+      const nextFormattedGradient = formatGradient(nextGradient)
 
       if (lastEmittedValueRef.current === nextFormattedGradient) {
         return
       }
 
       setGradient((currentGradient) => ({
+        type: nextGradient.type,
         angle: nextGradient.angle,
         stops: [
           {
@@ -112,7 +145,7 @@ export function ReactColorPicker({
     }
 
     setHsva((currentHsva) => preserveHue(nextColor, currentHsva))
-  }, [activeMode, resolvedValue])
+  }, [activeGradientType, activeMode, resolvedValue, shouldForceGradientType])
 
   // Carries the color across a mode switch and emits the value in the new
   // format. Declared after the value-sync effect above so its direct state
@@ -120,16 +153,16 @@ export function ReactColorPicker({
   function applyModeTransition(nextMode: ReactColorPickerActiveMode) {
     if (nextMode === 'gradient') {
       const nextGradient = {
-        ...gradient,
+        ...activeGradient,
         stops: [
           {
-            ...gradient.stops[0],
+            ...activeGradient.stops[0],
             color: hsva,
           },
-          gradient.stops[1],
+          activeGradient.stops[1],
         ],
-      } satisfies LinearGradient
-      const nextValue = formatLinearGradient(nextGradient)
+      } satisfies Gradient
+      const nextValue = formatGradient(nextGradient)
 
       setGradient(nextGradient)
       setSelectedGradientStop(0)
@@ -138,9 +171,9 @@ export function ReactColorPicker({
       return
     }
 
-    const nextColor = formatColor(gradient.stops[selectedGradientStop].color)
+    const nextColor = formatColor(activeGradient.stops[selectedGradientStop].color)
 
-    setHsva(gradient.stops[selectedGradientStop].color)
+    setHsva(activeGradient.stops[selectedGradientStop].color)
     lastEmittedValueRef.current = nextColor
     onChange?.(nextColor)
   }
@@ -158,13 +191,38 @@ export function ReactColorPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeMode])
 
-  const activeHsva = activeMode === 'gradient' ? gradient.stops[selectedGradientStop].color : hsva
+  // Runs the value conversion when the gradient type changes externally,
+  // including controlled custom switchers and locked gradient type updates.
+  const appliedGradientTypeRef = useRef(activeGradientType)
+  useEffect(() => {
+    if (appliedGradientTypeRef.current === activeGradientType) {
+      return
+    }
+    appliedGradientTypeRef.current = activeGradientType
+
+    const nextGradient = {
+      ...activeGradient,
+      type: activeGradientType,
+    } satisfies Gradient
+
+    if (activeMode === 'gradient') {
+      emitGradient(nextGradient)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeGradientType])
+
+  const activeHsva =
+    activeMode === 'gradient' ? activeGradient.stops[selectedGradientStop].color : hsva
   const solidColor = rgbToHex(hsvToRgb(activeHsva))
 
-  function emitGradient(nextGradient: LinearGradient) {
-    const nextValue = formatLinearGradient(nextGradient)
+  function emitGradient(nextGradient: Gradient) {
+    const nextValue = formatGradient(nextGradient)
 
     setGradient(nextGradient)
+    if (lastEmittedValueRef.current === nextValue) {
+      return
+    }
+
     lastEmittedValueRef.current = nextValue
     onChange?.(nextValue)
   }
@@ -178,7 +236,7 @@ export function ReactColorPicker({
     }
 
     if (activeMode === 'gradient') {
-      emitGradient(updateGradientStopColor(gradient, selectedGradientStop, clampedHsva))
+      emitGradient(updateGradientStopColor(activeGradient, selectedGradientStop, clampedHsva))
       return
     }
 
@@ -203,6 +261,27 @@ export function ReactColorPicker({
     onModeChange?.(nextMode)
   }
 
+  function changeGradientType(nextGradientType: ReactColorPickerGradientType) {
+    if (activeGradientType === nextGradientType) {
+      return
+    }
+
+    if (gradientType === 'both' && controlledActiveGradientType === undefined) {
+      const nextGradient = {
+        ...activeGradient,
+        type: nextGradientType,
+      } satisfies Gradient
+
+      if (activeMode === 'gradient') {
+        emitGradient(nextGradient)
+      } else {
+        setGradient(nextGradient)
+      }
+    }
+
+    onGradientTypeChange?.(nextGradientType)
+  }
+
   return (
     <div className={cx(css.rcp, classNames?.root)} style={styles?.root}>
       <Saturation
@@ -220,7 +299,7 @@ export function ReactColorPicker({
 
       {activeMode === 'gradient' && (
         <GradientBar
-          gradient={gradient}
+          gradient={activeGradient}
           selectedStop={selectedGradientStop}
           onSelectStop={setSelectedGradientStop}
           onChange={emitGradient}
@@ -230,13 +309,25 @@ export function ReactColorPicker({
       )}
 
       <div className={cx(css.controls, classNames?.controls)}>
-        {shouldShowModeToggle && (
-          <ModeSwitcher
-            activeMode={activeMode}
-            onChange={changeMode}
-            classNames={classNames}
-            styles={styles}
-          />
+        {(shouldShowModeToggle || shouldShowGradientTypeToggle) && (
+          <div className={css.controlSwitchers}>
+            {shouldShowModeToggle && (
+              <ModeSwitcher
+                activeMode={activeMode}
+                onChange={changeMode}
+                classNames={classNames}
+                styles={styles}
+              />
+            )}
+            {shouldShowGradientTypeToggle && (
+              <GradientTypeSwitcher
+                activeType={activeGradientType}
+                onChange={changeGradientType}
+                classNames={classNames}
+                styles={styles}
+              />
+            )}
+          </div>
         )}
         {!hideEyedrop && (
           <EyedropButton

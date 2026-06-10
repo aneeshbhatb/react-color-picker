@@ -1,4 +1,12 @@
-import type { GradientStop, GradientStopIndex, HSV, HSVA, LinearGradient, RGB } from './types'
+import type {
+  Gradient,
+  GradientStop,
+  GradientStopIndex,
+  HSV,
+  HSVA,
+  ReactColorPickerGradientType,
+  RGB,
+} from './types'
 
 export const DEFAULT_COLOR = '#ffffff'
 export const DEFAULT_GRADIENT = 'linear-gradient(90deg, #fffdf6 0%, #ffe3e3 100%)'
@@ -190,12 +198,22 @@ function formatPercent(value: number) {
   return Number(clamp(value, 0, 100).toFixed(2))
 }
 
-export function formatLinearGradient(gradient: LinearGradient) {
+function formatGradientStops(gradient: Gradient) {
   const [from, to] = gradient.stops
 
-  return `linear-gradient(${gradient.angle}deg, ${formatColor(from.color)} ${formatPercent(
+  return `${formatColor(from.color)} ${formatPercent(
     from.position
-  )}%, ${formatColor(to.color)} ${formatPercent(to.position)}%)`
+  )}%, ${formatColor(to.color)} ${formatPercent(to.position)}%`
+}
+
+export function formatGradient(gradient: Gradient) {
+  const stops = formatGradientStops(gradient)
+
+  if (gradient.type === 'radial') {
+    return `radial-gradient(circle, ${stops})`
+  }
+
+  return `linear-gradient(${gradient.angle}deg, ${stops})`
 }
 
 function splitByTopLevelCommas(value: string) {
@@ -261,8 +279,9 @@ function parseGradientStop(value: string, fallbackPosition: number): GradientSto
   }
 }
 
-function createDefaultGradient(): LinearGradient {
+function createDefaultGradient(type: ReactColorPickerGradientType = 'linear'): Gradient {
   return {
+    type,
     angle: DEFAULT_GRADIENT_ANGLE,
     stops: [
       { color: parseColor(DEFAULT_COLOR), position: 0 },
@@ -271,8 +290,12 @@ function createDefaultGradient(): LinearGradient {
   }
 }
 
-function createGradientFromColor(value: string): LinearGradient {
+function createGradientFromColor(
+  value: string,
+  type: ReactColorPickerGradientType = 'linear'
+): Gradient {
   return {
+    type,
     angle: DEFAULT_GRADIENT_ANGLE,
     stops: [
       { color: parseColor(value), position: 0 },
@@ -281,37 +304,58 @@ function createGradientFromColor(value: string): LinearGradient {
   }
 }
 
-export function parseLinearGradient(value: string): LinearGradient {
-  const gradientMatch = value.trim().match(/^linear-gradient\((.*)\)$/i)
-
-  if (!gradientMatch) {
-    return createGradientFromColor(value)
-  }
-
-  const parts = splitByTopLevelCommas(gradientMatch[1])
-
+function parseGradientParts(parts: string[], type: ReactColorPickerGradientType): Gradient {
   if (parts.length < 2) {
-    return createDefaultGradient()
+    return createDefaultGradient(type)
   }
 
-  const parsedAngle = parseGradientAngle(parts[0])
-  const stopParts = parsedAngle === null ? parts : parts.slice(1)
+  const parsedAngle = type === 'linear' ? parseGradientAngle(parts[0]) : null
+  const firstPartIsStop = type === 'radial' ? parseGradientStop(parts[0], 0) !== null : false
+  const stopParts =
+    type === 'linear'
+      ? parsedAngle === null
+        ? parts
+        : parts.slice(1)
+      : firstPartIsStop
+        ? parts
+        : parts.slice(1)
 
   if (stopParts.length < 2) {
-    return createDefaultGradient()
+    return createDefaultGradient(type)
   }
 
   const firstStop = parseGradientStop(stopParts[0], 0)
   const secondStop = parseGradientStop(stopParts[1], 100)
 
   if (!firstStop || !secondStop) {
-    return createDefaultGradient()
+    return createDefaultGradient(type)
   }
 
   return {
+    type,
     angle: parsedAngle ?? DEFAULT_GRADIENT_ANGLE,
     stops: [firstStop, secondStop],
   }
+}
+
+export function parseGradient(
+  value: string,
+  fallbackType: ReactColorPickerGradientType = 'linear'
+): Gradient {
+  const trimmedValue = value.trim()
+  const linearGradientMatch = trimmedValue.match(/^linear-gradient\((.*)\)$/i)
+
+  if (linearGradientMatch) {
+    return parseGradientParts(splitByTopLevelCommas(linearGradientMatch[1]), 'linear')
+  }
+
+  const radialGradientMatch = trimmedValue.match(/^radial-gradient\((.*)\)$/i)
+
+  if (radialGradientMatch) {
+    return parseGradientParts(splitByTopLevelCommas(radialGradientMatch[1]), 'radial')
+  }
+
+  return createGradientFromColor(value, fallbackType)
 }
 
 export function preserveHue(nextHsva: HSVA, currentHsva: HSVA) {
@@ -324,10 +368,10 @@ export function preserveHue(nextHsva: HSVA, currentHsva: HSVA) {
 }
 
 export function updateGradientStopColor(
-  gradient: LinearGradient,
+  gradient: Gradient,
   selectedGradientStop: GradientStopIndex,
   color: HSVA
-): LinearGradient {
+): Gradient {
   return {
     ...gradient,
     stops: gradient.stops.map((stop, index) =>
@@ -337,10 +381,10 @@ export function updateGradientStopColor(
 }
 
 export function updateGradientStopPosition(
-  gradient: LinearGradient,
+  gradient: Gradient,
   selectedGradientStop: GradientStopIndex,
   position: number
-): LinearGradient {
+): Gradient {
   const min = selectedGradientStop === 0 ? 0 : gradient.stops[0].position
   const max = selectedGradientStop === 0 ? gradient.stops[1].position : 100
   const clampedPosition = clamp(position, min, max)
