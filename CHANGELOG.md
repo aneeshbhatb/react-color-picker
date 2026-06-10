@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.0.0 — 2026-06-10
+
+### Added
+
+- Gradient type switcher.
+- Default radial color
+
 ## 0.4.0 — 2026-06-03
 
 ### Added
